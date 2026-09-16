@@ -11,7 +11,11 @@ public class Gridlock : ModuleRules
 		CppStandard = CppStandardVersion.Cpp20;
 		bUseUnity = false;
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "ProceduralMeshComponent" });
+		PublicDependencyModuleNames.AddRange(new string[] {
+			"Core", "CoreUObject", "Engine", "InputCore",
+			"Slate", "SlateCore",
+			"MeshDescription", "StaticMeshDescription"
+		});
 
 		string Root = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", ".."));
 		PublicIncludePaths.Add(Path.Combine(Root, "sim", "include"));

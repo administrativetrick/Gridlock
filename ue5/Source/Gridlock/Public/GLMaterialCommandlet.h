@@ -3,16 +3,18 @@
 #include "Commandlets/Commandlet.h"
 #include "GLMaterialCommandlet.generated.h"
 
-// Generates the game's materials as assets so the runtime never depends on hand-authored content:
-//   /Game/Materials/M_Neon      lit, params Color / Emissive / EmissiveStrength / Metallic / Roughness / RimWidth; neon rim on every face
-//   /Game/Materials/M_NeonInst  same rim, colour + strength from per-instance custom data 0..3 (instanced buildings, links, packets)
+// Generates every asset the client needs so the project stays reproducible from code:
+//   /Game/Materials/M_Neon      lit, params Color / Emissive / EmissiveStrength / Metallic / Roughness / RimWidth / Fill; neon rim on every face
+//   /Game/Materials/M_NeonInst  same rim, colour + strength from per-instance custom data 0..3 (instanced architecture)
+//   /Game/Materials/M_GlowInst  uniform glow from custom data (fiber, packets)
 //   /Game/Materials/M_Holo      unlit translucent, colour from custom data 0..2, opacity from 3 (presence discs)
-// Run:  UnrealEditor-Cmd.exe Gridlock.uproject -run=GLMaterial
+//   /Game/Meshes/SM_*           the procedural kitbash library (FGLMeshKit)
+// Run:  UnrealEditor-Cmd.exe Gridlock.uproject -run=GLAssets
 UCLASS()
-class UGLMaterialCommandlet : public UCommandlet
+class UGLAssetsCommandlet : public UCommandlet
 {
 	GENERATED_BODY()
 public:
-	UGLMaterialCommandlet();
+	UGLAssetsCommandlet();
 	virtual int32 Main(const FString& Params) override;
 };

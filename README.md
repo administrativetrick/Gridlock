@@ -33,11 +33,14 @@ Configures and compiles the sim library, the console harness and the tests with 
 Compiles the UE5 game module against the freshly built `build\gridlock_sim.lib`.
 
 ```bat
-"D:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%CD%\ue5\Gridlock.uproject" -run=GLMaterial
+"D:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%CD%\ue5\Gridlock.uproject" -run=GLAssets
 ```
 
-Regenerates the game's materials (`ue5/Content/Materials/M_Neon`, `M_NeonInst`, `M_GlowInst`, `M_Holo`)
-from code. They are committed, so this is only needed after editing `GLMaterialCommandlet.cpp`.
+Regenerates every asset from code: the materials (`ue5/Content/Materials/M_Neon`, `M_NeonInst`,
+`M_GlowInst`, `M_Holo`) and the procedural kitbash library (`ue5/Content/Meshes/SM_*`: towers, slabs,
+arcologies, factories, docks, sprawl, undercity, the Exchange spire, every infrastructure prop, the
+fiber cable and the bevelled hex tile, all built by `GLMeshKit`). The assets are committed, so this
+is only needed after editing `GLMeshKit.cpp` or `GLMaterialCommandlet.cpp`.
 
 ## Play
 
@@ -57,14 +60,18 @@ white packets fall off long links. Build a node (**1**/**2**) where a sector bro
 
 Vertical slice per docs/A §8: all systems of docs 01–03 are implemented and exercised by the
 AI in headless runs (Hostile Takeover and Valuation endings observed; Singularity, Blackout and
-Charter paths are wired and validated but rarer). Presentation is asset-free by design: materials
-are generated from code (neon rim on every face, emissive and per-instance colour), sectors carry
-procedural brutalist block clusters on an instanced mesh with syndicate glow, fiber is emissive
-geometry with packet spheres that drop away in proportion to loss, presence shows as holographic
-discs, the ground is a wet reflective plane under Lumen, with height fog and a bloom / fringe /
-grain / vignette post stack. A drawn-text HUD carries the wireframe UI. Authored Nanite
-architecture, Niagara ribbons and a CommonUI Board Room remain the next art layer. Balance is
-first-pass; see `--headless` traces.
+Charter paths are wired and validated but rarer). Presentation is generated from code, no
+hand-authored content: a procedural kitbash library gives every sector type its own brutalist
+architecture (setback towers, twin shafts with skybridges, finned slabs, stepped arcologies,
+factories with tanks and chimneys, dock cranes with containers, sprawl clusters, undercity
+pipework, the Exchange obelisk) and every structure its own prop (finned server towers,
+transformers, pylons, bunkers, dishes, racks), instanced with per-instance syndicate glow and
+neon rims traced on every edge. Fiber is emissive cable geometry with packet spheres that drop
+away in proportion to loss; presence shows as holographic discs; the ground is a wet reflective
+plane under Lumen, with height fog and a bloom / fringe / grain / vignette grade. The interface is
+Slate built in C++: gauged top bar, clickable command toolbar with build and ops menus, dual-layer
+inspector with integrity, delivery, firewall and presence bars, research and doctrine windows, the
+Board Room, and the log. Balance is first-pass; see `--headless` traces.
 
 Two deliberate deviations from the design text, both found in implementation:
 

@@ -19,8 +19,9 @@ public:
 	const gl::Game& Sim() const { return *Game; }
 	int32 Me() const { return 0; }
 	void EndCycle();
-	void MarkDirty() { bDirty = true; }
+	void MarkDirty() { bDirty = true; ++Version; }
 	bool ConsumeDirty() { const bool D = bDirty; bDirty = false; return D; }
+	int32 Version = 0;               // bumps on every state change; the UI compares against it
 
 	UPROPERTY() TObjectPtr<AGLMapActor> Map = nullptr;
 

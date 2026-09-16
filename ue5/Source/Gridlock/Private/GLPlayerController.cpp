@@ -20,7 +20,10 @@ AGLGameMode* AGLPlayerController::GM() const { return Cast<AGLGameMode>(UGamepla
 void AGLPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	SetInputMode(FInputModeGameOnly());
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	SetInputMode(InputMode);
 	Recenter();
 }
 
@@ -34,16 +37,15 @@ void AGLPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AGLPlayerController::OnCancel);
 	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &AGLPlayerController::ToggleHelp);
 	InputComponent->BindKey(EKeys::V, IE_Pressed, this, &AGLPlayerController::ToggleBoard);
+	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &AGLPlayerController::ToggleResearch);
+	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AGLPlayerController::ToggleDoctrine);
 	InputComponent->BindKey(EKeys::L, IE_Pressed, this, &AGLPlayerController::SetLay);
-	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &AGLPlayerController::QueueTech);
-	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AGLPlayerController::TakeDoctrine);
-	InputComponent->BindKey(EKeys::X, IE_Pressed, this, &AGLPlayerController::TogglePriority);
+	InputComponent->BindKey(EKeys::X, IE_Pressed, this, &AGLPlayerController::TogglePriorityKey);
 	InputComponent->BindKey(EKeys::B, IE_Pressed, this, &AGLPlayerController::BuyBW);
 	InputComponent->BindKey(EKeys::G, IE_Pressed, this, &AGLPlayerController::ToggleDeny);
 	InputComponent->BindKey(EKeys::Home, IE_Pressed, this, &AGLPlayerController::Recenter);
 	InputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &AGLPlayerController::ZoomIn);
 	InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AGLPlayerController::ZoomOut);
-	// build: 1 edge node, 2 core node, 3 hyperscale, 4 substation, 5 repeater, 6 rack, 7 outpost, 8 array, 9 lab, 0 honeypot
 	InputComponent->BindKey(EKeys::One, IE_Pressed, this, &AGLPlayerController::BuildKey<(int32)gl::StructKind::Node, 1>);
 	InputComponent->BindKey(EKeys::Two, IE_Pressed, this, &AGLPlayerController::BuildKey<(int32)gl::StructKind::Node, 2>);
 	InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AGLPlayerController::BuildKey<(int32)gl::StructKind::Node, 3>);
@@ -54,7 +56,6 @@ void AGLPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Eight, IE_Pressed, this, &AGLPlayerController::BuildKey<(int32)gl::StructKind::Array, 0>);
 	InputComponent->BindKey(EKeys::Nine, IE_Pressed, this, &AGLPlayerController::BuildKey<(int32)gl::StructKind::Lab, 0>);
 	InputComponent->BindKey(EKeys::Zero, IE_Pressed, this, &AGLPlayerController::BuildKey<(int32)gl::StructKind::Honeypot, 0>);
-	// ops
 	InputComponent->BindKey(EKeys::I, IE_Pressed, this, &AGLPlayerController::OpKey<(int32)gl::OpKind::Intrusion>);
 	InputComponent->BindKey(EKeys::H, IE_Pressed, this, &AGLPlayerController::OpKey<(int32)gl::OpKind::Harden>);
 	InputComponent->BindKey(EKeys::P, IE_Pressed, this, &AGLPlayerController::OpKey<(int32)gl::OpKind::Purge>);
@@ -64,7 +65,6 @@ void AGLPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::D, IE_Pressed, this, &AGLPlayerController::OpKey<(int32)gl::OpKind::DDoS>);
 	InputComponent->BindKey(EKeys::C, IE_Pressed, this, &AGLPlayerController::OpKey<(int32)gl::OpKind::Scan>);
 	InputComponent->BindKey(EKeys::N, IE_Pressed, this, &AGLPlayerController::OpKey<(int32)gl::OpKind::Daemon>);
-	// victory verbs
 	InputComponent->BindKey(EKeys::F5, IE_Pressed, this, &AGLPlayerController::VerbKey<0>);
 	InputComponent->BindKey(EKeys::F6, IE_Pressed, this, &AGLPlayerController::VerbKey<1>);
 	InputComponent->BindKey(EKeys::F7, IE_Pressed, this, &AGLPlayerController::VerbKey<2>);
@@ -73,7 +73,6 @@ void AGLPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::F10, IE_Pressed, this, &AGLPlayerController::VerbKey<5>);
 	InputComponent->BindKey(EKeys::F11, IE_Pressed, this, &AGLPlayerController::VerbKey<6>);
 	InputComponent->BindKey(EKeys::F12, IE_Pressed, this, &AGLPlayerController::VerbKey<7>);
-	// pan
 	InputComponent->BindKey(EKeys::Up, IE_Pressed, this, &AGLPlayerController::Pan<0, true>);   InputComponent->BindKey(EKeys::Up, IE_Released, this, &AGLPlayerController::Pan<0, false>);
 	InputComponent->BindKey(EKeys::Down, IE_Pressed, this, &AGLPlayerController::Pan<1, true>); InputComponent->BindKey(EKeys::Down, IE_Released, this, &AGLPlayerController::Pan<1, false>);
 	InputComponent->BindKey(EKeys::Left, IE_Pressed, this, &AGLPlayerController::Pan<2, true>); InputComponent->BindKey(EKeys::Left, IE_Released, this, &AGLPlayerController::Pan<2, false>);
@@ -103,10 +102,10 @@ FString AGLPlayerController::ModeText() const
 {
 	switch (Mode)
 	{
-	case EGLMode::Lay: return FromHex < 0 ? TEXT("LAY FIBER: click a hex in your network to start") : TEXT("LAY FIBER: click the destination hex");
-	case EGLMode::Build: return FString::Printf(TEXT("BUILD %s%s: click one of your hexes"), BuildKind == (int32)gl::StructKind::Node ? UTF8_TO_TCHAR(gl::nodeDef(BuildTier).name) : UTF8_TO_TCHAR(gl::structDef((gl::StructKind)BuildKind).name), TEXT(""));
-	case EGLMode::Op: return FString::Printf(TEXT("OP %s: click the target hex"), UTF8_TO_TCHAR(gl::opDef((gl::OpKind)OpKind).name));
-	default: return TEXT("SELECT: click a hex to inspect it");
+	case EGLMode::Lay: return FromHex < 0 ? TEXT("LAY FIBER - click a hex in your network to start") : TEXT("LAY FIBER - click the destination hex");
+	case EGLMode::Build: return FString::Printf(TEXT("BUILD %s - click one of your hexes"), BuildKind == (int32)gl::StructKind::Node ? UTF8_TO_TCHAR(gl::nodeDef(BuildTier).name) : UTF8_TO_TCHAR(gl::structDef((gl::StructKind)BuildKind).name));
+	case EGLMode::Op: return FString::Printf(TEXT("OP %s - click the target hex"), UTF8_TO_TCHAR(gl::opDef((gl::OpKind)OpKind).name));
+	default: return TEXT("SELECT - click a hex to inspect it");
 	}
 }
 
@@ -140,7 +139,7 @@ void AGLPlayerController::HandleHexClick(int32 Hex)
 			const gl::Syndicate& S0 = Sim.S().synds[Me];
 			gl::LinkType LT = S0.techs[(int)gl::Tech::BackboneFiber] ? gl::LinkType::Backbone : gl::LinkType::Trunk;
 			gl::PathPlan P = Sim.PlanPath(Me, FromHex, Hex, LT);
-			if (!P.ok) { LastMsg = S2F(P.msg); }
+			if (!P.ok) LastMsg = S2F(P.msg);
 			else
 			{
 				bool Ok = true; for (int R : P.needRights) { gl::Result RR = Sim.BuyRights(Me, R); if (!RR) { LastMsg = S2F(RR.msg); Ok = false; break; } }
@@ -151,8 +150,7 @@ void AGLPlayerController::HandleHexClick(int32 Hex)
 		break;
 	case EGLMode::Build:
 	{
-		gl::Variant V = gl::Variant::None;
-		const gl::Syndicate& S0 = Sim.S().synds[Me];
+		gl::Variant V = gl::Variant::None; const gl::Syndicate& S0 = Sim.S().synds[Me];
 		if (BuildKind == (int32)gl::StructKind::Node && BuildTier == 3 && S0.arch == gl::Arch::Hive) V = gl::Variant::Inference;
 		if (BuildKind == (int32)gl::StructKind::Node && BuildTier == 2 && S0.arch == gl::Arch::Ghost) V = gl::Variant::Phantom;
 		Report(Sim.Build(Me, (gl::StructKind)BuildKind, Hex, BuildTier, V));
@@ -167,32 +165,34 @@ void AGLPlayerController::HandleHexClick(int32 Hex)
 }
 
 void AGLPlayerController::OnEndCycle() { if (AGLGameMode* G = GM()) { G->EndCycle(); LastMsg = FString::Printf(TEXT("Cycle %d resolved."), G->Sim().S().cycle); Sync(); } }
-void AGLPlayerController::OnCancel() { Mode = EGLMode::Select; FromHex = -1; LastMsg.Empty(); Sync(); }
+void AGLPlayerController::OnCancel() { Mode = EGLMode::Select; FromHex = -1; LastMsg.Empty(); bBoard = bResearch = bDoctrine = false; Sync(); }
 void AGLPlayerController::SetLay() { Mode = EGLMode::Lay; FromHex = -1; LastMsg.Empty(); Sync(); }
 void AGLPlayerController::SetBuild(int32 Kind, int32 Tier) { Mode = EGLMode::Build; BuildKind = Kind; BuildTier = Tier; LastMsg.Empty(); Sync(); }
 void AGLPlayerController::SetOp(int32 Kind) { Mode = EGLMode::Op; OpKind = Kind; LastMsg.Empty(); Sync(); }
 
-void AGLPlayerController::QueueTech()
+void AGLPlayerController::AutoQueueTech()
 {
 	AGLGameMode* G = GM(); gl::Game& Sim = G->Sim();
 	static const gl::Tech Order[] = { gl::Tech::GridContracts, gl::Tech::Trenching, gl::Tech::HardenedKernels, gl::Tech::RedundantPeering, gl::Tech::DPI, gl::Tech::ShellCompanies, gl::Tech::BackboneFiber, gl::Tech::ModularDC, gl::Tech::FuturesDesk, gl::Tech::Persistence, gl::Tech::FieldTeams, gl::Tech::Honeypots, gl::Tech::ZeroDay, gl::Tech::VerticalIntegration, gl::Tech::Lobbying, gl::Tech::HyperscaleCooling, gl::Tech::Buyback, gl::Tech::TenderOffer, gl::Tech::KillChain, gl::Tech::ConsolidationLobby, gl::Tech::BackboneSniffing, gl::Tech::SabotageDoctrine, gl::Tech::BlackoutProtocol };
 	for (gl::Tech T : Order) if (Sim.CanResearch(G->Me(), T)) { Report(Sim.QueueResearch(G->Me(), T)); return; }
-	LastMsg = TEXT("Nothing researchable right now.");
+	LastMsg = TEXT("Nothing researchable right now."); Sync();
 }
-
-void AGLPlayerController::TakeDoctrine()
+void AGLPlayerController::QueueTechAt(int32 I) { if (AGLGameMode* G = GM()) Report(G->Sim().QueueResearch(G->Me(), (gl::Tech)I)); }
+void AGLPlayerController::ClearResearch() { if (AGLGameMode* G = GM()) Report(G->Sim().ClearResearch(G->Me())); }
+void AGLPlayerController::TakeDoctrineAt(int32 I) { if (AGLGameMode* G = GM()) Report(G->Sim().TakeDoctrine(G->Me(), (gl::Doctrine)I)); }
+void AGLPlayerController::AutoDoctrine()
 {
 	AGLGameMode* G = GM(); gl::Game& Sim = G->Sim();
 	for (int i = 0; i < gl::DoctrineCount; ++i) if (Sim.CanTakeDoctrine(G->Me(), (gl::Doctrine)i)) { Report(Sim.TakeDoctrine(G->Me(), (gl::Doctrine)i)); return; }
-	LastMsg = FString::Printf(TEXT("No doctrine available (Mandate %d; Board Review every 12 cycles)."), Sim.S().synds[G->Me()].mandate);
+	LastMsg = FString::Printf(TEXT("No doctrine available (Mandate %d; Board Review every 12 cycles)."), Sim.S().synds[G->Me()].mandate); Sync();
 }
-
-void AGLPlayerController::TogglePriority()
+void AGLPlayerController::SetSelPriority(gl::Priority P) { AGLGameMode* G = GM(); if (Sel < 0) { LastMsg = TEXT("Select one of your hexes first."); Sync(); return; } Report(G->Sim().SetPriority(G->Me(), Sel, P)); }
+void AGLPlayerController::TogglePriorityKey()
 {
-	AGLGameMode* G = GM(); if (Sel < 0) { LastMsg = TEXT("Select one of your hexes first."); return; }
+	AGLGameMode* G = GM(); if (Sel < 0) { LastMsg = TEXT("Select one of your hexes first."); Sync(); return; }
 	const gl::Hex& H = G->Sim().S().hexes[Sel]; auto It = H.priority.find(G->Me());
 	gl::Priority Next = (It == H.priority.end() || It->second == gl::Priority::Normal) ? gl::Priority::Critical : It->second == gl::Priority::Critical ? gl::Priority::Low : gl::Priority::Normal;
-	Report(G->Sim().SetPriority(G->Me(), Sel, Next));
+	SetSelPriority(Next);
 }
 void AGLPlayerController::BuyBW() { if (AGLGameMode* G = GM()) Report(G->Sim().BuyBandwidth(G->Me(), 10)); }
 void AGLPlayerController::ToggleDeny() { AGLGameMode* G = GM(); if (Sel < 0) return; const gl::Hex& H = G->Sim().S().hexes[Sel]; Report(G->Sim().SetRowDenial(G->Me(), Sel, !H.rowDenial)); }
@@ -219,6 +219,7 @@ void AGLPlayerController::Verb(int32 Which)
 	case 5: Report(Sim.DeclareBlackout(Me)); break;
 	case 6: Report(Sim.ConsolidationMotion(Me)); break;
 	case 7: Report(Rival >= 0 ? Sim.PetitionKillSwitch(Me, Rival) : gl::Result::Err("No rival is launching.")); break;
+	case 8: Report(Rival >= 0 ? Sim.Complaint(Me, Rival) : gl::Result::Err("No rival is in a fight or vote.")); break;
 	default: break;
 	}
 }

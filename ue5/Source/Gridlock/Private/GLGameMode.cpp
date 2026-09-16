@@ -87,7 +87,7 @@ void AGLGameMode::SetupDevFlags()
 	if (FParse::Param(FCommandLine::Get(), TEXT("autoshot")))
 	{
 		FTimerHandle H1;
-		GetWorldTimerManager().SetTimer(H1, FTimerDelegate::CreateLambda([]() { FScreenshotRequest::RequestScreenshot(TEXT("gridlock_autoshot"), false, false); }), 12.f, false);
+		GetWorldTimerManager().SetTimer(H1, FTimerDelegate::CreateLambda([]() { FScreenshotRequest::RequestScreenshot(TEXT("gridlock_autoshot"), true, false); }), 12.f, false);
 	}
 	int32 Cycles = 0;
 	if (FParse::Value(FCommandLine::Get(), TEXT("autocycles="), Cycles) && Cycles > 0)
@@ -97,6 +97,20 @@ void AGLGameMode::SetupDevFlags()
 		GetWorldTimerManager().SetTimer(H3, FTimerDelegate::CreateLambda([Self]() { if (Self.IsValid()) Self->EndCycle(); }), 1.0f, true, 2.0f);
 		FTimerHandle H4;
 		GetWorldTimerManager().SetTimer(H4, FTimerDelegate::CreateLambda([Self, H3]() mutable { if (Self.IsValid()) Self->GetWorldTimerManager().ClearTimer(H3); }), 2.0f + Cycles * 1.0f + 0.5f, false);
+	}
+	if (FParse::Param(FCommandLine::Get(), TEXT("autoselect")))
+	{
+		FTimerHandle H5; TWeakObjectPtr<AGLGameMode> Self(this);
+		GetWorldTimerManager().SetTimer(H5, FTimerDelegate::CreateLambda([Self]()
+		{
+			if (!Self.IsValid()) return;
+			if (AGLPlayerController* PC = Cast<AGLPlayerController>(Self->GetWorld()->GetFirstPlayerController()))
+			{
+				PC->Sel = Self->Sim().S().synds[Self->Me()].crown; PC->bBoard = FParse::Param(FCommandLine::Get(), TEXT("autoboard"));
+				if (Self->Map) Self->Map->Selected = PC->Sel;
+				Self->MarkDirty();
+			}
+		}), 4.f, false);
 	}
 	float Quit = 0.f;
 	if (FParse::Value(FCommandLine::Get(), TEXT("autoquit="), Quit) && Quit > 0.f)
@@ -110,5 +124,5 @@ void AGLGameMode::EndCycle()
 {
 	if (!Game || Game->S().over) return;
 	Game->EndCycle();
-	bDirty = true;
+	MarkDirty();
 }
