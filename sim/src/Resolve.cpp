@@ -176,7 +176,7 @@ static void stepCyber(GameState& S) {
             if (!ok.empty()) { int t = ok[rollInt(S, (int)ok.size())]; S.hexes[t].daemons[s.id] += 1; ++total; }
           }
         }
-        addExposure(S, s, 0.5 * alive, false);
+        addExposure(S, s, 0.2 * alive, false);
       }
     }
   }
@@ -333,7 +333,7 @@ static void stepYields(GameState& S) {
     }
     s.capital += y;
   }
-  for (Syndicate& s : S.synds) if (s.alive && has(s, Tech::SovereignWealth) && s.capital > 1000) s.capital += 0.02 * (s.capital - 1000);
+  for (Syndicate& s : S.synds) if (s.alive && has(s, Tech::SovereignWealth) && s.capital > 1000) s.capital += std::min(100.0, 0.02 * (s.capital - 1000));
 }
 
 // ------------------------------------------------------------ 7. upkeep
@@ -391,7 +391,7 @@ static void stepExposure(GameState& S) {
     }
     if (s.exposure >= 100 && !hasDoc(s, Doctrine::G_Deniability)) {
       for (Hex& h : S.hexes) if (h.owner == s.id) for (int n : S.grid.neighborsV(h.id)) { int o = S.hexes[n].owner; if (o >= 0 && o != s.id) h.P[o] = clampd((h.P.count(o) ? h.P[o] : 0) + 25, 0, 100); }
-      s.exposure = 95;
+      s.exposure = 80;
       logMsg(S, "PUBLIC ENEMY: every rival gained +25 presence in your border subnets.", s.id);
     }
     s.exposure = clampd(s.exposure - m.xCool, 0, 100);
@@ -486,6 +486,18 @@ static void stepEvents(GameState& S) {
       for (Link& l : S.links) if (l.alive && l.built && l.sid != s.id) for (Segment& sg : l.segs) if (sg.a == st.hex || sg.b == st.hex) leech += sg.flow;
       leech *= 0.2 * 0.5;
       if (leech > 0) s.tapIncome[st.hex] += leech;
+    }
+  }
+  // elimination: no node standing and no sector held
+  for (Syndicate& s : S.synds) {
+    if (!s.alive) continue;
+    bool litNode = false; for (auto& st : S.structs) if (st.alive && st.built && st.sid == s.id && st.kind == StructKind::Node && st.darkUntil <= S.cycle) litNode = true;
+    if (ownedHexes(S, s.id).empty() && (!litNode || s.insolventStreak >= 3)) {
+      s.alive = false; s.ops.clear(); s.queued.clear(); s.hasPhase = false;
+      for (auto& h : S.hexes) { h.P.erase(s.id); h.roots.erase(s.id); h.daemons.erase(s.id); }
+      for (auto& l : S.links) if (l.sid == s.id) l.alive = false;
+      for (auto& st : S.structs) if (st.sid == s.id) st.alive = false;
+      logMsg(S, "DELISTED: " + s.name + " has no network left and is out of the game.");
     }
   }
   computeValuations(S);

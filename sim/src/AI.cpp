@@ -56,7 +56,9 @@ void threatBoard(Ctx& c) {
 
 void cartels(Ctx& c) {
   GameState& S = c.S; Syndicate& s = c.s;
+  bool member = false; for (auto& ca : S.cartels) if (std::find(ca.members.begin(), ca.members.end(), s.id) != ca.members.end()) member = true;
   for (Syndicate& t : S.synds) {
+    if (member) break;                                   // one cartel at a time
     if (t.id == s.id || !t.alive || t.id >= 8 || s.posture[t.id] < Posture::Contain) continue;
     for (Syndicate& u : S.synds) {
       if (u.id == s.id || u.id == t.id || !u.alive || !u.isAI || t.id >= 8 || u.posture[t.id] < Posture::Contain) continue;
@@ -68,7 +70,8 @@ void cartels(Ctx& c) {
   for (auto it = S.cartels.begin(); it != S.cartels.end();) {
     bool anyContain = false; for (int m : it->members) if (synd(S, m).alive && it->target < 8 && synd(S, m).posture[it->target] >= Posture::Contain) anyContain = true;
     bool infight = false; for (int m : it->members) for (int n : it->members) if (m != n && m < 8 && n < 8 && synd(S, m).posture[n] >= Posture::Contain) infight = true;
-    if ((!anyContain && S.cycle - it->since >= 5) || infight || !synd(S, it->target).alive) { logMsg(S, "The cartel against " + synd(S, it->target).name + " dissolved."); it = S.cartels.erase(it); } else ++it;
+    bool old = S.cycle - it->since >= 10;
+    if ((!anyContain && old) || (infight && old) || !synd(S, it->target).alive) { logMsg(S, "The cartel against " + synd(S, it->target).name + " dissolved."); it = S.cartels.erase(it); } else ++it;
   }
 }
 
@@ -85,10 +88,12 @@ bool expandOnce(Ctx& c, bool wantExchange) {
     bool exch = h.type == Sector::Exchange;
     if (exch) { if (!wantExchange || structIn(S, h.id, s.id, StructKind::Rack, false)) continue; }
     else if (h.owner != -1) continue;
-    int bd = 99; for (int n : net) bd = std::min(bd, S.grid.dist(n, h.id)); if (bd > 4) continue;
+    int bd = 99; for (int n : net) bd = std::min(bd, S.grid.dist(n, h.id)); if (bd > (exch ? 8 : 4)) continue;
     int from = nearestNetworkHex(c, net, h.id); if (from < 0) continue;
+    bool dup = false; for (auto& l : S.links) if (l.alive && l.sid == s.id && ((l.path.front() == from && l.path.back() == h.id) || (l.path.front() == h.id && l.path.back() == from))) dup = true;
+    if (dup) continue;
     LinkType lt = LinkType::Trunk; if (has(s, Tech::BackboneFiber) && structIn(S, from, s.id, StructKind::Node)) lt = LinkType::Backbone;
-    if (s.arch == Arch::Ghost) lt = LinkType::Dark;
+    if (s.arch == Arch::Ghost && s.capital > 400) lt = LinkType::Dark;
     PathPlan p = c.g.PlanPath(s.id, from, h.id, lt); if (!p.ok || p.total > budget) continue;
     double value = exch ? 90 : sectorDef(h.type).cap + sectorDef(h.type).pop * (s.arch == Arch::Hive ? 3 : 0.5);
     if (exch && s.arch == Arch::Hegemony) value += 40;
@@ -99,7 +104,7 @@ bool expandOnce(Ctx& c, bool wantExchange) {
   std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.score > b.score; });
   Cand& b = cands[0];
   for (int r : b.plan.needRights) if (!c.g.BuyRights(s.id, r)) return false;
-  LinkType lt = LinkType::Trunk; if (has(s, Tech::BackboneFiber) && structIn(S, b.plan.path[0], s.id, StructKind::Node)) lt = LinkType::Backbone; if (s.arch == Arch::Ghost) lt = LinkType::Dark;
+  LinkType lt = LinkType::Trunk; if (has(s, Tech::BackboneFiber) && structIn(S, b.plan.path[0], s.id, StructKind::Node)) lt = LinkType::Backbone; if (s.arch == Arch::Ghost && s.capital > 400) lt = LinkType::Dark;
   return (bool)c.g.LayLink(s.id, lt, b.plan.path);
 }
 
@@ -126,7 +131,7 @@ void economy(Ctx& c) {
   }
   // bandwidth saturated → a new node beats more cable
   if (saturated) {
-    int tier = (c.m.maxTier >= 2 && s.capital >= buildCost(S, s, StructKind::Node, 2, Variant::None) + c.reserve + 50) ? 2 : 1;
+    int tier = (owned >= 12 && c.m.maxTier >= 2 && s.capital >= buildCost(S, s, StructKind::Node, 2, Variant::None) + c.reserve + 100) ? 2 : 1;
     if (s.capital >= buildCost(S, s, StructKind::Node, tier, Variant::None) + c.reserve) {
       int best = -1; double bs = -1e9;
       for (Hex& h : S.hexes) {
@@ -142,8 +147,29 @@ void economy(Ctx& c) {
   // rack at any reachable exchange
   std::set<int> net = networkHexes(S, s.id);
   for (int ex : S.exchanges) if (net.count(ex) && !structIn(S, ex, s.id, StructKind::Rack, false) && s.capital >= buildCost(S, s, StructKind::Rack, 0, Variant::None) + c.reserve) g.Build(s.id, StructKind::Rack, ex);
+  // racked but not peered → the fee starves behind saturated trunks; run an artery from the node with the most surplus
+  if (S.cycle % 4 == 0) for (int ex : S.exchanges) {
+    if (!structIn(S, ex, s.id, StructKind::Rack)) continue;
+    auto pl = s.peeredLast.find(ex); if (pl != s.peeredLast.end() && pl->second >= S.cycle - 1) continue;
+    int from = -1; double bestSurplus = 2.0;
+    for (auto& st : S.structs) if (st.alive && st.built && st.sid == s.id && st.kind == StructKind::Node && st.out > 0) { double sur = (1.0 - st.util) * st.out; if (sur > bestSurplus) { bestSurplus = sur; from = st.hex; } }
+    if (from < 0) {
+      // no surplus anywhere: the answer is a node near the exchange, not more cable
+      int best = -1, bdd = 1 << 30; for (Hex& h : S.hexes) if (h.owner == s.id && !structIn(S, h.id, s.id, StructKind::Node, false)) { int d = S.grid.dist(h.id, ex); if (d < bdd) { bdd = d; best = h.id; } }
+      if (best >= 0 && s.capital > buildCost(S, s, StructKind::Node, 1, Variant::None) + c.reserve) g.Build(s.id, StructKind::Node, best, 1);
+      continue;
+    }
+    bool dup = false; for (auto& l : S.links) if (l.alive && l.sid == s.id && ((l.path.front() == from && l.path.back() == ex) || (l.path.front() == ex && l.path.back() == from))) dup = true;
+    if (dup) continue;
+    LinkType lt = has(s, Tech::BackboneFiber) ? LinkType::Backbone : LinkType::Trunk;
+    PathPlan p = g.PlanPath(s.id, from, ex, lt);
+    if (!p.ok || p.total > s.capital - c.reserve) continue;
+    for (int r : p.needRights) g.BuyRights(s.id, r);
+    g.LayLink(s.id, lt, p.path);
+    break;
+  }
   // surveillance at crown early
-  if (S.cycle >= 3 && !structIn(S, s.crown, s.id, StructKind::Array, false) && s.capital > 200) g.Build(s.id, StructKind::Array, s.crown);
+  if (owned >= 8 && !structIn(S, s.crown, s.id, StructKind::Array, false) && s.capital > 300 + c.reserve) g.Build(s.id, StructKind::Array, s.crown);
   // anti-loss: starving sectors far from a source
   for (Hex& h : S.hexes) {
     if (h.owner != s.id || !h.ratio.count(s.id) || h.ratio[s.id] >= 0.85) continue;
@@ -168,8 +194,20 @@ void economy(Ctx& c) {
   }
   // labs and execs
   int labs = 0; for (auto& st : S.structs) if (st.alive && st.sid == s.id && st.kind == StructKind::Lab) ++labs;
-  if (labs < 1 && s.capital > 550 + c.reserve) g.Build(s.id, StructKind::Lab, s.crown);
+  if (labs < 1 && owned >= 12 && s.capital > 900 + c.reserve) g.Build(s.id, StructKind::Lab, s.crown);
   if ((int)s.execs.size() < 4 && s.capital > 900 + c.reserve) g.HireExec(s.id, s.arch == Arch::Ghost ? ExecSpec::HOI : s.arch == Arch::Hegemony ? ExecSpec::Fixer : ExecSpec::CFO);
+  // rich: spend it — more nodes and a full board
+  if (s.capital > 1500 + c.reserve) {
+    if ((int)s.execs.size() < K::MaxExecs) g.HireExec(s.id, ExecSpec::CFO);
+    int best = -1; double bs = -1e9;
+    for (Hex& h : S.hexes) { if (h.owner != s.id) continue; bool hasNode = false; for (auto& st : S.structs) if (st.alive && st.hex == h.id && st.kind == StructKind::Node) hasNode = true; if (hasNode) continue; double far = 99; for (auto& st : S.structs) if (st.alive && st.sid == s.id && st.kind == StructKind::Node) far = std::min(far, (double)S.grid.dist(st.hex, h.id)); if (far < 3) continue; if (far > bs) { bs = far; best = h.id; } }
+    if (best >= 0) g.Build(s.id, StructKind::Node, best, c.m.maxTier >= 2 ? 2 : 1, s.arch == Arch::Ghost ? Variant::Phantom : Variant::None);
+  }
+  // insolvent: shed non-essential upkeep
+  if (s.insolventStreak > 0) {
+    for (auto& st : S.structs) if (st.alive && st.built && st.sid == s.id && (st.kind == StructKind::Lab || st.kind == StructKind::Outpost || st.kind == StructKind::Honeypot)) { g.Scuttle(s.id, st.id); break; }
+    for (auto it = s.ops.begin(); it != s.ops.end();) { if (it->kind != OpKind::Harden) it = s.ops.erase(it); else ++it; }
+  }
   // outposts on chokepoints (hegemony)
   if (s.arch == Arch::Hegemony && s.capital > 600 + c.reserve) {
     int outposts = 0; for (auto& st : S.structs) if (st.alive && st.sid == s.id && st.kind == StructKind::Outpost) ++outposts;
@@ -238,6 +276,14 @@ void takeoverAttempts(Ctx& c) {
 
 void offence(Ctx& c) {
   GameState& S = c.S; Syndicate& s = c.s; Game& g = c.g;
+  // exposure discipline: cool off before the Bureau notices; only a Desperation posture overrides it
+  bool desperate = false; for (int i = 0; i < 8 && i < (int)S.synds.size(); ++i) if (i != s.id && s.posture[i] == Posture::Desperation) desperate = true;
+  double xLimit = desperate ? 70 : 35;
+  if (s.exposure >= xLimit) {
+    for (auto it = s.ops.begin(); it != s.ops.end();) { if (it->kind == OpKind::Siphon || it->kind == OpKind::Jam) it = s.ops.erase(it); else ++it; }
+    takeoverAttempts(c);
+    return;
+  }
   std::vector<int> targets = rivalTargets(c);
   int intrusions = 0; for (const Op& o : s.ops) if (o.kind == OpKind::Intrusion) ++intrusions;
   int maxIntr = s.arch == Arch::Ghost ? 3 : s.arch == Arch::Hive ? 1 : 2;
@@ -264,7 +310,8 @@ void offence(Ctx& c) {
   // daemons (hive)
   if (s.arch == Arch::Hive) {
     int total = 0; for (auto& h : S.hexes) { auto it = h.daemons.find(s.id); if (it != h.daemons.end()) total += it->second; }
-    if (total < c.m.daemonCap) { int best = -1; double bp = -1; for (Hex& h : S.hexes) { if (h.type == Sector::Barrier) continue; double P = h.owner == s.id ? 100 : (h.P.count(s.id) ? h.P[s.id] : 0); if (P < 10 && !canReach(S, s, h)) continue; double sc = sectorDef(h.type).pop + (h.owner != s.id ? 2 : 0) - (h.daemons.count(s.id) ? h.daemons[s.id] * 3 : 0); if (sc > bp) { bp = sc; best = h.id; } } if (best >= 0) g.QueueOp(s.id, OpKind::Daemon, best); }
+    if (s.exposure > 45 && total > 0 && s.flow.compute >= 30) g.QueueOp(s.id, OpKind::Retrain, s.crown);
+    else if (total < c.m.daemonCap && s.exposure < 30) { int best = -1; double bp = -1; for (Hex& h : S.hexes) { if (h.type == Sector::Barrier) continue; double P = h.owner == s.id ? 100 : (h.P.count(s.id) ? h.P[s.id] : 0); if (P < 10 && !canReach(S, s, h)) continue; double sc = sectorDef(h.type).pop + (h.owner != s.id ? 2 : 0) - (h.daemons.count(s.id) ? h.daemons[s.id] * 3 : 0); if (sc > bp) { bp = sc; best = h.id; } } if (best >= 0) g.QueueOp(s.id, OpKind::Daemon, best); }
   }
 }
 
@@ -273,7 +320,7 @@ void pursue(Ctx& c) {
   GameState& S = c.S; Syndicate& s = c.s; Game& g = c.g;
   if (s.arch == Arch::Hegemony) {
     if (!s.hasPhase) g.TenderOffer(s.id);
-    if (s.hasPhase && s.phase.type == VictoryPath::Takeover) { int pct = (int)std::floor((s.capital - c.reserve) / c.m.buyShareCost); if (pct >= 2) g.BuyShares(s.id, std::min(10, pct)); }
+    if (s.hasPhase && s.phase.type == VictoryPath::Takeover) { int pct = (int)std::floor((s.capital - c.reserve) / c.m.buyShareCost); if (pct >= 2) g.BuyShares(s.id, std::min(5, pct)); }
   }
   if (s.arch == Arch::Hive) {
     if (!s.hasPhase) g.StartTraining(s.id);

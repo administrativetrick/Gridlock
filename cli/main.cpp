@@ -275,12 +275,35 @@ int main(int argc, char** argv) {
   std::printf("%sGRIDLOCK: SILICON SYNDICATE%s\n\n", BOLD, RESET);
   if (argc >= 2 && std::string(argv[1]) == "--headless") {
     cfg.playerIsAI = true; cfg.seed = argc >= 3 ? argv[2] : "bench"; int n = argc >= 4 ? std::atoi(argv[3]) : 200;
-    Game g(cfg); for (int i = 0; i < n && !g.S().over; ++i) g.EndCycle();
+    Game g(cfg);
+    for (int i = 0; i < n && !g.S().over; ++i) {
+      g.EndCycle();
+      if (g.S().cycle % 10 == 0) for (auto& y : g.S().synds) { int sec = 0; for (auto& hx : g.S().hexes) if (hx.owner == y.id) ++sec; std::printf("c%-3d %-24s sec %2d cap %7.0f BW %5.1f del %5.1f sold %5.1f comp %5.1f strand %5.1f X %3.0f ops %zu\n", g.S().cycle, y.name.c_str(), sec, y.capital, y.flow.produced, y.flow.delivered, y.flow.sold, y.flow.compute, y.flow.stranded, y.exposure, y.ops.size()); }
+    }
     const GameState& s = g.S();
     for (auto& y : s.synds) { int sec = 0; for (auto& hx : s.hexes) if (hx.owner == y.id) ++sec; std::printf("%-26s %-18s sectors %2d capital %7.0f share %5.1f%%\n", y.name.c_str(), archDef(y.arch).name, sec, y.capital, y.share * 100); }
     if (s.over) std::printf("Winner: %s by %s at cycle %d\n", s.synds[s.victory.winner].name.c_str(), pathName(s.victory.path), s.victory.cycle);
     for (auto& l : g.RecentLog(-1, 15)) std::printf("  %s\n", l.c_str());
     if (argc >= 5) { int sid = std::atoi(argv[4]); std::printf("--- log of %s ---\n", s.synds[sid].name.c_str()); for (auto& l : g.RecentLog(sid, 80)) std::printf("  %s\n", l.c_str()); }
+    // exchange reachability diagnostic
+    for (auto& y : s.synds) {
+      if (!y.alive) continue;
+      int racks = 0; for (auto& st : s.structs) if (st.alive && st.sid == y.id && st.kind == StructKind::Rack) ++racks;
+      std::printf("%-24s racks %d peered %zu |", y.name.c_str(), racks, y.flow.peered.size());
+      for (int ex : s.exchanges) {
+        int from = -1, bd = 1 << 30;
+        for (auto& st : s.structs) if (st.alive && st.sid == y.id) { int d = s.grid.dist(st.hex, ex); if (d < bd) { bd = d; from = st.hex; } }
+        for (auto& l : s.links) if (l.alive && l.sid == y.id) for (int h : l.path) if (s.hexes[h].type != Sector::Barrier) { int d = s.grid.dist(h, ex); if (d < bd) { bd = d; from = h; } }
+        PathPlan p = from >= 0 ? g.PlanPath(y.id, from, ex, LinkType::Trunk) : PathPlan{};
+        std::printf(" X%d dist %d %s(%.0f)", ex, bd, p.ok ? "ok" : ("NO:" + p.msg).c_str(), p.total);
+      }
+      std::printf("\n");
+      if (argc >= 6) {
+        for (auto& st : s.structs) if (st.alive && st.sid == y.id && st.kind == StructKind::Node) std::printf("    node #%d T%d built %d dark %d out %.1f util %.2f\n", st.hex, st.tier, (int)st.built, (int)(st.darkUntil > s.cycle), st.out, st.util);
+        for (auto& l : s.links) if (l.alive && l.sid == y.id) { bool touch = false; for (int ex : s.exchanges) if (l.path.front() == ex || l.path.back() == ex) touch = true; if (!touch) continue;
+          std::printf("    link %d %s built %d:", l.id, linkDef(l.type).name, (int)l.built); for (auto& sg : l.segs) std::printf(" [%d-%d %.1f/%.0f L%.2f]", sg.a, sg.b, sg.flow, sg.cap, sg.lastLoss); std::printf("\n"); }
+      }
+    }
     return 0;
   }
   std::puts("Choose your syndicate:");

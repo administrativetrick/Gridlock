@@ -1,0 +1,23 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "Strategy",
+	"Description": "Gridlock: Silicon Syndicate - cyberpunk dual-layer 4X. UE5 client over the engine-agnostic GridlockSim library.",
+	"Modules": [
+		{
+			"Name": "Gridlock",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"ProceduralMeshComponent"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ProceduralMeshComponent",
+			"Enabled": true
+		}
+	]
+}

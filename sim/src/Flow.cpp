@@ -154,6 +154,14 @@ struct Solver {
     initSources();
     for (Sink& k : sinks) if (k.pri == Priority::Critical) serveSector(k);
     double pool = drawAny(opsNeed); if (pass2) s.flow.opsPool = pool;
+    // peering fee is served before Normal sectors: 10 BW of Exchange access is worth more than one Sprawl hex
+    // (deliberate deviation from docs/01 §4.1 ordering; sales still come last)
+    std::vector<int> peeredNow;
+    for (int ex : S.exchanges) {
+      if (!g.hexes.count(ex) || !structIn(S, ex, s.id, StructKind::Rack)) continue;
+      double fee = route(ex, sectorDef(Sector::Exchange).demand, nullptr);
+      if (fee >= sectorDef(Sector::Exchange).demand - 0.01) { peeredNow.push_back(ex); if (pass2) s.flow.peered.push_back(ex); }
+    }
     for (Sink& k : sinks) if (k.pri == Priority::Normal) serveSector(k);
     for (Sink& k : sinks) if (k.pri == Priority::Low) serveSector(k);
     // compute
@@ -165,16 +173,8 @@ struct Solver {
       double eff = st.variant == Variant::Inference ? c * 1.5 : c;
       if (pass2) { s.flow.compute += eff; s.flow.computeByNode[st.id] = eff; }
     }
-    // exchange fee + sales
-    for (int ex : S.exchanges) {
-      if (!g.hexes.count(ex) || !structIn(S, ex, s.id, StructKind::Rack)) continue;
-      double fee = route(ex, sectorDef(Sector::Exchange).demand, nullptr);
-      if (fee >= sectorDef(Sector::Exchange).demand - 0.01) {
-        if (pass2) s.flow.peered.push_back(ex);
-        double sold = route(ex, 1e9, nullptr);
-        if (pass2) s.flow.sold += sold;
-      }
-    }
+    // sales of whatever is left, at the exchanges we peered this pass
+    for (int ex : peeredNow) { double sold = route(ex, 1e9, nullptr); if (pass2) s.flow.sold += sold; }
     // buffer
     double add = std::min({ 0.10 * s.flow.produced, residual(), std::max(0.0, m.bufferCap - s.buffer) });
     drawAny(add);

@@ -55,9 +55,11 @@ static Syndicate* activeBidder(GameState& S) { for (auto& s : S.synds) if (s.has
 Result vBuyShares(GameState& S, int sid, int pct) {
   Syndicate& s = synd(S, sid); Mods m = modsOf(S, s);
   if (!activeBidder(S)) return Result::Err("No Proxy Fight is active.");
-  if (pct < 1 || pct > 20) return Result::Err("Buy 1..20 percent.");
+  if (pct < 1 || pct > 5) return Result::Err("Buy 1..5 percent per cycle (the float is thin).");
   if (s.abstainUntil > S.cycle) return Result::Err("Greenmailed: abstaining.");
-  double cost = pct * m.buyShareCost; if (s.capital < cost) return Result::Err("Need " + fmt(cost, 0) + " Capital.");
+  if (s.shareAdj + pct > 30) return Result::Err("No more than 30% of the float can be bought in one fight.");
+  double cost = pct * m.buyShareCost * (1.0 + s.shareAdj / 10.0);      // each block bought makes the next dearer
+  if (s.capital < cost) return Result::Err("Need " + fmt(cost, 0) + " Capital.");
   s.capital -= cost; s.shareAdj += pct; computeValuations(S);
   logMsg(S, s.name + " bought " + std::to_string(pct) + "% of the float.");
   return Result::Ok("Shares bought.");
@@ -249,6 +251,8 @@ static void tickEmergent(GameState& S) {
 
 void victoryTick(GameState& S) {
   if (S.over) return;
+  { int alive = 0, last = -1; for (auto& s : S.synds) if (s.alive && s.shadowOf < 0) { ++alive; last = s.id; }
+    if (alive == 1 && last >= 0) { win(S, last, VictoryPath::Valuation, "every rival has been delisted. The grid has one owner."); return; } }
   tickDistricts(S);
   for (Syndicate& s : S.synds) {
     if (!s.alive || !s.hasPhase || S.over) continue;

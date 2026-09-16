@@ -51,6 +51,28 @@ static void testWorkedExample() {
   EXPECT(S.hexes[ids[4]].delivered[0] >= 8 - 1e-6, "with a Backbone first hop E is fully served (docs/01 §11 fix 2)");
 }
 
+// A node one hop from an Exchange with a rack must pay the 10 BW fee, peer, and sell its surplus.
+static void testExchangePeering() {
+  Config cfg; cfg.player = Arch::Hive; cfg.ais = { Arch::Ghost }; cfg.seed = "peer";
+  Game g(cfg); GameState& S = g.S();
+  for (Hex& h : S.hexes) { h.owner = -1; h.C = 0; h.P.clear(); h.rights.clear(); h.roots.clear(); h.brownout = false; h.dual.clear(); }
+  S.structs.clear(); S.links.clear();
+  for (auto& s : S.synds) { s.ops.clear(); s.queued.clear(); s.tapIncome.clear(); s.buffer = 0; }
+  int ex = S.exchanges[0]; int A = -1; for (int n : S.grid.neighborsV(ex)) if (S.hexes[n].type != Sector::Barrier) { A = n; break; }
+  EXPECT(A >= 0, "exchange has a buildable neighbour");
+  Syndicate& s = S.synds[0]; s.computePct = 0; s.capital = 1000;
+  Hex& ha = S.hexes[A]; ha.type = Sector::Campus; ha.owner = 0; ha.C = 100; ha.rights.insert(0);
+  Structure& node = addStruct(S, s, A, StructKind::Node, 2, Variant::None, true, true); node.powerFrac = 1.0;
+  addStruct(S, s, A, StructKind::Substation, 0, Variant::None, true);
+  addStruct(S, s, ex, StructKind::Rack, 0, Variant::None, true);
+  addLink(S, s, LinkType::Trunk, { A, ex }, true);
+  solveFlow(S, s);
+  EXPECT(s.flow.peered.size() == 1, "peered at the exchange");
+  // 30 produced − 6 local − 10 fee (÷0.97 loss) − 10% buffer(3) → the rest sold
+  EXPECT(s.flow.sold > 8.0, "surplus sold at the exchange");
+  EXPECT_NEAR(s.flow.produced, 30, 1e-9, "production");
+}
+
 static void testDeterminism() {
   Config cfg; cfg.playerIsAI = true; cfg.seed = "det-42";
   Game a(cfg), b(cfg);
@@ -128,6 +150,7 @@ static void testFogOfWar() {
 
 int main() {
   run("worked example (docs/01 §11)", testWorkedExample);
+  run("exchange peering and sales", testExchangePeering);
   run("determinism", testDeterminism);
   run("order validation", testValidation);
   run("control decay", testControlDecay);

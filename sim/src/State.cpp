@@ -247,7 +247,7 @@ double totalUpkeep(const GameState& S, const Syndicate& s) {
     else u += structDef(st.kind).upkeep;
   }
   for (auto& l : S.links) if (l.alive && l.sid == s.id && l.built) u += l.wireless ? linkDef(l.type).upkeep : linkDef(l.type).upkeep * (double)l.segs.size();
-  u += K::ExecUpkeep * (double)s.execs.size();
+  u += K::ExecUpkeep * (double)std::max<size_t>(0, s.execs.size() > 2 ? s.execs.size() - 2 : 0);   // the two founders draw no salary
   return u * m.upkeepMult;
 }
 

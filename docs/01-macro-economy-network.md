@@ -164,9 +164,13 @@ lit node, over every link you own, to every sink:
 6. **Buffer top-up** (§7).
 
 Sink priority is player-settable per sector: **Critical / Normal / Low**. Default is
-Normal, with the solver breaking ties by Capital base (rich sectors first). Ops are
-served *after* Critical sectors and *before* Normal ones, so a player who marks
-everything Critical starves their own operations — a legible, deliberate trade-off.
+Normal. Within a class the solver serves sectors **nearest the source first** (ties by
+Capital base): bandwidth is consumed along the cable, so the far end of a chain is what
+starves — which is exactly what the worked example in §11 shows. Ops are served *after*
+Critical sectors and *before* Normal ones, so a player who marks everything Critical
+starves their own operations — a legible, deliberate trade-off. The **Exchange peering
+fee** (10 BW) is also served before Normal sectors: Exchange access is worth more than one
+Sprawl hex, and a large saturated empire must still be able to peer. Sales come last.
 
 ### 4.2 Loss per hop — the distance tax
 
