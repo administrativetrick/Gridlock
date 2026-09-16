@@ -112,6 +112,12 @@ void AGLGameMode::SetupDevFlags()
 			}
 		}), 4.f, false);
 	}
+	if (FParse::Param(FCommandLine::Get(), TEXT("autoresearch")))
+	{
+		// flips only the panel flag, exactly like the T key, so the shot proves the panel populates without any other input
+		FTimerHandle H7; TWeakObjectPtr<AGLGameMode> Self(this);
+		GetWorldTimerManager().SetTimer(H7, FTimerDelegate::CreateLambda([Self]() { if (Self.IsValid()) if (AGLPlayerController* PC = Cast<AGLPlayerController>(Self->GetWorld()->GetFirstPlayerController())) PC->ToggleResearch(); }), 6.f, false);
+	}
 	float Zoom = 0.f;
 	if (FParse::Value(FCommandLine::Get(), TEXT("autozoom="), Zoom) && Zoom > 0.f)
 	{

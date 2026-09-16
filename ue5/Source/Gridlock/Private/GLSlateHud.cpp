@@ -81,9 +81,10 @@ void SGLHud::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime,
 {
 	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
 	AGLGameMode* G = GM(); if (!G || !PC) return;
-	if (G->Version != SeenVersion || PC->Sel != SeenSel || PC->Mode != SeenMode || PC->FromHex != SeenFrom)
+	const int32 Flags = (PC->bBoard ? 1 : 0) | (PC->bResearch ? 2 : 0) | (PC->bDoctrine ? 4 : 0) | (PC->bGuide ? 8 : 0) | (PC->bHelp ? 16 : 0);
+	if (G->Version != SeenVersion || PC->Sel != SeenSel || PC->Mode != SeenMode || PC->FromHex != SeenFrom || Flags != SeenFlags)
 	{
-		SeenVersion = G->Version; SeenSel = PC->Sel; SeenMode = PC->Mode; SeenFrom = PC->FromHex;
+		SeenVersion = G->Version; SeenSel = PC->Sel; SeenMode = PC->Mode; SeenFrom = PC->FromHex; SeenFlags = Flags;
 		RebuildInspector(); RebuildLog(); RebuildBoard(); RebuildResearch(); RebuildDoctrine(); RebuildGuide();
 	}
 }
@@ -220,7 +221,7 @@ TSharedRef<SWidget> SGLHud::HelpPanel()
 	B->AddSlot().AutoHeight().Padding(0, 6, 0, 0) [ Head(TEXT("READING THE MAP")) ];
 	L(TEXT("Colour = who holds the sector, brightness = integrity, dim = stale data, near-black = never seen. Tall buildings = rich sectors. The white spires are Exchanges."), kDim);
 	L(TEXT("Fiber: thickness = capacity, colour shifts red with loss, orange flicker = sabotaged. Discs: cyan = your presence, other colours = rivals you can read, red = rooted. Grey hexagon = single point of failure."), kDim);
-	L(TEXT("Camera: arrows / W A S E pan, wheel zooms, Home recentres. Right-click or Esc cancels any mode."), kDim);
+	L(TEXT("Camera: hold the middle mouse button and drag to pan, or use arrows / W A S E. Wheel zooms, Home recentres, F flies to the nearest Exchange. Right-click or Esc cancels any mode."), kDim);
 	return Panel(B, 12.f);
 }
 

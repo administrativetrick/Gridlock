@@ -63,6 +63,8 @@ private:
 	template <int32 K> void OpKey() { SetOp(K); }
 	template <int32 V> void VerbKey() { Verb(V); }
 	template <int32 Dir, bool On> void Pan() { PanState[Dir] = On; }
+	template <bool On> void Drag() { bDragging = On; }
 
 	bool PanState[4] = { false, false, false, false };
+	bool bDragging = false;        // middle mouse held: drag pans the map
 };

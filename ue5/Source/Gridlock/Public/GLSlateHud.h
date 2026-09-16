@@ -43,7 +43,7 @@ private:
 
 	TSharedPtr<SVerticalBox> InspectorBox, LogBox, BoardBox, ResearchBox, DoctrineBox, GuideBox;
 	void RebuildGuide();
-	EGLMode SeenMode = EGLMode::Select; int32 SeenFrom = -2;
+	EGLMode SeenMode = EGLMode::Select; int32 SeenFrom = -2; int32 SeenFlags = -1;
 
 	AGLGameMode* GM() const;
 	TSharedRef<SWidget> Panel(TSharedRef<SWidget> Content, float Pad = 10.f);

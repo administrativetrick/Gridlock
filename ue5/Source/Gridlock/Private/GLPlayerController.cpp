@@ -32,6 +32,8 @@ void AGLPlayerController::SetupInputComponent()
 	Super::SetupInputComponent();
 	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AGLPlayerController::OnClick);
 	InputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, this, &AGLPlayerController::OnCancel);
+	InputComponent->BindKey(EKeys::MiddleMouseButton, IE_Pressed, this, &AGLPlayerController::Drag<true>);
+	InputComponent->BindKey(EKeys::MiddleMouseButton, IE_Released, this, &AGLPlayerController::Drag<false>);
 	InputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &AGLPlayerController::OnEndCycle);
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &AGLPlayerController::OnEndCycle);
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AGLPlayerController::OnCancel);
@@ -94,6 +96,14 @@ void AGLPlayerController::PlayerTick(float DeltaTime)
 		FVector D(0);
 		if (PanState[0]) D.Y += 1; if (PanState[1]) D.Y -= 1; if (PanState[2]) D.X -= 1; if (PanState[3]) D.X += 1;
 		if (!D.IsNearlyZero()) P->AddActorWorldOffset(D.GetSafeNormal() * Speed * DeltaTime);
+		if (bDragging)
+		{
+			// middle-drag: the map follows the cursor. World units per pixel from the camera's vertical field of view (36 deg).
+			float Dx = 0.f, Dy = 0.f; GetInputMouseDelta(Dx, Dy);
+			int32 VW = 1, VH = 1; GetViewportSize(VW, VH);
+			const float PerPixel = 2.f * P->GetZoom() * FMath::Tan(FMath::DegreesToRadians(18.f)) / FMath::Max(1, VH);
+			P->AddActorWorldOffset(FVector(-Dx, -Dy, 0.f) * PerPixel);
+		}
 	}
 	// hover highlight
 	if (AGLGameMode* G = GM()) if (G->Map)
