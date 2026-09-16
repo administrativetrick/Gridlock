@@ -32,6 +32,13 @@ Configures and compiles the sim library, the console harness and the tests with 
 
 Compiles the UE5 game module against the freshly built `build\gridlock_sim.lib`.
 
+```bat
+"D:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%CD%\ue5\Gridlock.uproject" -run=GLMaterial
+```
+
+Regenerates the game's materials (`ue5/Content/Materials/M_Neon`, `M_NeonInst`, `M_GlowInst`, `M_Holo`)
+from code. They are committed, so this is only needed after editing `GLMaterialCommandlet.cpp`.
+
 ## Play
 
 ```bat
@@ -50,10 +57,14 @@ white packets fall off long links. Build a node (**1**/**2**) where a sector bro
 
 Vertical slice per docs/A §8: all systems of docs 01–03 are implemented and exercised by the
 AI in headless runs (Hostile Takeover and Valuation endings observed; Singularity, Blackout and
-Charter paths are wired and validated but rarer). Presentation uses procedural hex prisms and
-engine basic shapes with dynamic colours, Lumen with a single key light, and a drawn-text HUD.
-The Nanite brutalist kitbash, Niagara flow ribbons and the CommonUI Board Room are the next art
-layer. Balance is first-pass; see `--headless` traces.
+Charter paths are wired and validated but rarer). Presentation is asset-free by design: materials
+are generated from code (neon rim on every face, emissive and per-instance colour), sectors carry
+procedural brutalist block clusters on an instanced mesh with syndicate glow, fiber is emissive
+geometry with packet spheres that drop away in proportion to loss, presence shows as holographic
+discs, the ground is a wet reflective plane under Lumen, with height fog and a bloom / fringe /
+grain / vignette post stack. A drawn-text HUD carries the wireframe UI. Authored Nanite
+architecture, Niagara ribbons and a CommonUI Board Room remain the next art layer. Balance is
+first-pass; see `--headless` traces.
 
 Two deliberate deviations from the design text, both found in implementation:
 

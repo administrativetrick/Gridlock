@@ -8,6 +8,9 @@
 #include "Engine/SkyLight.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Engine/ExponentialHeightFog.h"
+#include "Components/ExponentialHeightFogComponent.h"
+#include "Engine/PostProcessVolume.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "TimerManager.h"
@@ -41,15 +44,39 @@ void AGLGameMode::BeginPlay()
 	Map = GetWorld()->SpawnActor<AGLMapActor>(AGLMapActor::StaticClass(), FTransform::Identity);
 	Map->Init(this);
 
-	// Neon-noir lighting: one cool key light, faint sky. No static lighting anywhere.
-	if (ADirectionalLight* Key = GetWorld()->SpawnActor<ADirectionalLight>(FVector(0, 0, 3000), FRotator(-58.f, 35.f, 0.f)))
+	// Neon-noir lighting: a dim cool key so the emissive network carries the frame, faint violet sky, dense low fog,
+	// and a film-style post stack (bloom, fringe, grain, vignette, cool grade). No static lighting anywhere.
+	if (ADirectionalLight* Key = GetWorld()->SpawnActor<ADirectionalLight>(FVector(0, 0, 3000), FRotator(-52.f, 35.f, 0.f)))
 	{
 		Key->SetMobility(EComponentMobility::Movable);
-		if (ULightComponent* LC = Key->GetLightComponent()) { LC->SetIntensity(2.5f); LC->SetLightColor(FLinearColor(0.72f, 0.78f, 1.0f)); }
+		if (ULightComponent* LC = Key->GetLightComponent()) { LC->SetIntensity(1.1f); LC->SetLightColor(FLinearColor(0.55f, 0.65f, 1.0f)); LC->SetVolumetricScatteringIntensity(1.5f); }
 	}
 	if (ASkyLight* Sky = GetWorld()->SpawnActor<ASkyLight>(FVector(0, 0, 3000), FRotator::ZeroRotator))
 	{
-		if (USkyLightComponent* SC = Sky->GetLightComponent()) { SC->SetMobility(EComponentMobility::Movable); SC->SetIntensity(0.35f); SC->SetLightColor(FLinearColor(0.35f, 0.3f, 0.6f)); SC->RecaptureSky(); }
+		if (USkyLightComponent* SC = Sky->GetLightComponent()) { SC->SetMobility(EComponentMobility::Movable); SC->SetIntensity(0.25f); SC->SetLightColor(FLinearColor(0.3f, 0.25f, 0.6f)); SC->RecaptureSky(); }
+	}
+	if (AExponentialHeightFog* Fog = GetWorld()->SpawnActor<AExponentialHeightFog>(FVector(0, 0, -50.f), FRotator::ZeroRotator))
+	{
+		if (UExponentialHeightFogComponent* FC = Fog->GetComponent())
+		{
+			FC->SetFogDensity(0.012f); FC->SetFogHeightFalloff(0.6f); FC->SetFogInscatteringColor(FLinearColor(0.02f, 0.03f, 0.09f));
+			FC->SetStartDistance(600.f); FC->SetVolumetricFog(true); FC->SetVolumetricFogScatteringDistribution(0.4f); FC->SetVolumetricFogExtinctionScale(1.5f);
+		}
+	}
+	if (APostProcessVolume* PP = GetWorld()->SpawnActor<APostProcessVolume>(FVector::ZeroVector, FRotator::ZeroRotator))
+	{
+		PP->bUnbound = true;
+		FPostProcessSettings& P = PP->Settings;
+		P.bOverride_BloomIntensity = true; P.BloomIntensity = 1.6f;
+		P.bOverride_BloomThreshold = true; P.BloomThreshold = 0.5f;
+		P.bOverride_VignetteIntensity = true; P.VignetteIntensity = 0.5f;
+		P.bOverride_SceneFringeIntensity = true; P.SceneFringeIntensity = 0.45f;
+		P.bOverride_FilmGrainIntensity = true; P.FilmGrainIntensity = 0.28f;
+		P.bOverride_ColorSaturation = true; P.ColorSaturation = FVector4(1.12f, 1.12f, 1.12f, 1.f);
+		P.bOverride_ColorContrast = true; P.ColorContrast = FVector4(1.18f, 1.18f, 1.18f, 1.f);
+		P.bOverride_ColorGain = true; P.ColorGain = FVector4(0.9f, 0.95f, 1.12f, 1.f);
+		P.bOverride_AutoExposureBias = true; P.AutoExposureBias = 0.4f;
+		P.bOverride_AmbientOcclusionIntensity = true; P.AmbientOcclusionIntensity = 0.7f;
 	}
 	SetupDevFlags();
 }

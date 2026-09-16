@@ -8,7 +8,8 @@ AGLCameraPawn::AGLCameraPawn()
 	RootComponent = Focus;
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(Focus);
-	Camera->FieldOfView = 40.f;
+	Camera->FieldOfView = 36.f;
+	Camera->PostProcessBlendWeight = 0.f;
 	ApplyZoom();
 }
 
@@ -21,7 +22,7 @@ void AGLCameraPawn::SetZoom(float NewZoom)
 void AGLCameraPawn::ApplyZoom()
 {
 	// 62 degrees down, looking toward +Y so the hex rows read left to right
-	const float Pitch = 62.f;
+	const float Pitch = 54.f;
 	const float Back = Zoom * FMath::Cos(FMath::DegreesToRadians(Pitch));
 	const float Up = Zoom * FMath::Sin(FMath::DegreesToRadians(Pitch));
 	Camera->SetRelativeLocation(FVector(0.f, -Back, Up));
