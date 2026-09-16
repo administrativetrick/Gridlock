@@ -36,11 +36,15 @@ Compiles the UE5 game module against the freshly built `build\gridlock_sim.lib`.
 "D:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%CD%\ue5\Gridlock.uproject" -run=GLAssets
 ```
 
-Regenerates every asset from code: the materials (`ue5/Content/Materials/M_Neon`, `M_NeonInst`,
-`M_GlowInst`, `M_Holo`) and the procedural kitbash library (`ue5/Content/Meshes/SM_*`: towers, slabs,
-arcologies, factories, docks, sprawl, undercity, the Exchange spire, every infrastructure prop, the
-fiber cable and the bevelled hex tile, all built by `GLMeshKit`). The assets are committed, so this
-is only needed after editing `GLMeshKit.cpp` or `GLMaterialCommandlet.cpp`.
+Regenerates every asset from code: the tileable textures (`ue5/Content/Textures/T_*`: concrete
+albedo / occlusion / roughness with panel seams, its normal map, grime and streaks, a window-cell
+atlas with per-cell lighting and hue, and the circuit-trace pattern for tile tops, all synthesised by
+`GLTextureKit`), the materials (`ue5/Content/Materials/M_Neon`, `M_NeonInst`, `M_GlowInst`, `M_Holo`,
+whose surface is a custom HLSL node sampling the textures tri-planar in world space with lit windows
+on walls) and the procedural kitbash library (`ue5/Content/Meshes/SM_*`: towers, slabs, arcologies,
+factories, docks, sprawl, undercity, the Exchange spire, every infrastructure prop, the fiber cable
+and the bevelled hex tile, all built by `GLMeshKit`). The assets are committed, so this is only
+needed after editing `GLTextureKit.cpp`, `GLMeshKit.cpp` or `GLMaterialCommandlet.cpp`.
 
 ## Play
 
@@ -66,7 +70,9 @@ architecture (setback towers, twin shafts with skybridges, finned slabs, stepped
 factories with tanks and chimneys, dock cranes with containers, sprawl clusters, undercity
 pipework, the Exchange obelisk) and every structure its own prop (finned server towers,
 transformers, pylons, bunkers, dishes, racks), instanced with per-instance syndicate glow and
-neon rims traced on every edge. Fiber is emissive cable geometry with packet spheres that drop
+neon rims traced on every edge, surfaced with generated concrete, grime and normal maps sampled
+tri-planar in world space, lit window cells on every wall tinted toward the owner, and glowing
+circuit traces on the tile tops. Fiber is emissive cable geometry with packet spheres that drop
 away in proportion to loss; presence shows as holographic discs; the ground is a wet reflective
 plane under Lumen, with height fog and a bloom / fringe / grain / vignette grade. The interface is
 Slate built in C++: gauged top bar, clickable command toolbar with build and ops menus, dual-layer

@@ -73,11 +73,11 @@ void AGLMapActor::Init(AGLGameMode* InGM)
 	Ground->SetRelativeLocation(MapCenter() + FVector(0, 0, -1.f)); Ground->SetRelativeScale3D(FVector(140.f, 140.f, 1.f));
 	{
 		UMaterialInstanceDynamic* GMat = UMaterialInstanceDynamic::Create(MatNeon, this);
-		GMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.006f, 0.008f, 0.014f));
+		GMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.12f, 0.14f, 0.2f));
 		GMat->SetVectorParameterValue(TEXT("Emissive"), FLinearColor::Black);
 		GMat->SetScalarParameterValue(TEXT("EmissiveStrength"), 0.f);
-		GMat->SetScalarParameterValue(TEXT("Metallic"), 0.9f);
-		GMat->SetScalarParameterValue(TEXT("Roughness"), 0.18f);
+		GMat->SetScalarParameterValue(TEXT("Metallic"), 0.85f);
+		GMat->SetScalarParameterValue(TEXT("Roughness"), 0.3f);
 		Ground->SetMaterial(0, GMat);
 	}
 	UStaticMesh* Tile = Mesh(TEXT("SM_Tile"));
@@ -95,7 +95,8 @@ void AGLMapActor::Init(AGLGameMode* InGM)
 		UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(MatNeon, this);
 		MID->SetScalarParameterValue(TEXT("RimWidth"), 0.045f);
 		MID->SetScalarParameterValue(TEXT("Metallic"), 0.3f);
-		MID->SetScalarParameterValue(TEXT("Roughness"), 0.55f);
+		MID->SetScalarParameterValue(TEXT("Roughness"), 0.8f);
+		MID->SetScalarParameterValue(TEXT("TraceStrength"), H.type == gl::Sector::Barrier ? 0.f : 0.55f);
 		M->SetMaterial(0, MID);
 		HexTiles[H.id] = M; HexMats[H.id] = MID; CompToHex.Add(M, H.id);
 	}
@@ -114,11 +115,12 @@ void AGLMapActor::BuildCity()
 	BuildingRefs.Reset();
 	auto ISM = [&](const TCHAR* Name) -> UInstancedStaticMeshComponent* {
 		const FName Key(Name); if (TObjectPtr<UInstancedStaticMeshComponent>* E = ArchISM.Find(Key)) return E->Get();
-		UInstancedStaticMeshComponent* C = MakeISM(this, RootComponent, *FString::Printf(TEXT("Arch_%s"), Name), Mesh(Name), MatInst, 4, true);
+		UInstancedStaticMeshComponent* C = MakeISM(this, RootComponent, *FString::Printf(TEXT("Arch_%s"), Name), Mesh(Name), MatInst, 5, true);
 		ArchISM.Add(Key, C); return C; };
 	auto Place = [&](const gl::Hex& H, const TCHAR* Name, FVector Offset, float Yaw, float Scale) {
 		UInstancedStaticMeshComponent* C = ISM(Name);
 		const int32 Idx = C->AddInstance(FTransform(FRotator(0, Yaw, 0), HexWorld(H.id) + FVector(0, 0, kPuck) + Offset, FVector(Scale)), true);
+		C->SetCustomDataValue(Idx, 4, (float)((H.id * 37 + Idx * 11) % 97) * 0.173f, false);     // window-pattern seed
 		BuildingRefs.Add({ FName(Name), Idx, H.id }); };
 	for (const gl::Hex& H : S.hexes)
 	{
@@ -172,8 +174,8 @@ void AGLMapActor::RefreshHexes()
 			continue;
 		}
 		FLinearColor Glow; float Str; bool Vis; GlowOf(H.id, Glow, Str, Vis);
-		FLinearColor Base(0.035f, 0.04f, 0.05f);
-		if (!Vis) Base *= 0.5f;
+		FLinearColor Base(0.26f, 0.3f, 0.4f);
+		if (!Vis) Base *= 0.45f;
 		if (Vis && H.brownout && H.owner == Me) { Glow = FLinearColor(1.f, 0.25f, 0.05f); Str = 1.2f + 0.8f * FMath::Sin(Time * 6.f); }
 		if (H.id == Selected) { Str += 1.2f; Base += FLinearColor(0.05f, 0.05f, 0.06f); }
 		if (H.id == FromHex) { Glow = FLinearColor(1.f, 0.85f, 0.2f); Str = 2.f; }
@@ -241,7 +243,7 @@ void AGLMapActor::RefreshStructures()
 		C->SetRelativeLocation(HexWorld(St.hex) + Offset + FVector(0, 0, kPuck));
 		if (TObjectPtr<UMaterialInstanceDynamic>* M = StructMats.Find(St.id))
 		{
-			(*M)->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.03f, 0.03f, 0.04f));
+			(*M)->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.45f, 0.5f, 0.6f));
 			(*M)->SetVectorParameterValue(TEXT("Emissive"), Col);
 			(*M)->SetScalarParameterValue(TEXT("EmissiveStrength"), Str);
 		}
