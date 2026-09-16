@@ -260,36 +260,122 @@ FGLTex FGLTextureKit::Signage(int32 S)
 	return T;
 }
 
-// ---------------------------------------------------------------- tile traces
+// ---------------------------------------------------------------- tile: datacenter floor plan as a circuit board
+namespace
+{
+	struct FPlanCanvas
+	{
+		int32 S; TArray<float> V; TArray<float> O; float Order = 0.f;      // O = build order (0 first .. 1 last) of the element drawn at each pixel
+		explicit FPlanCanvas(int32 InS) : S(InS) { V.SetNumZeroed(InS * InS); O.SetNumZeroed(InS * InS); }
+		bool InHex(float X, float Y) const { const float Px = X - S * 0.5f, Py = Y - S * 0.5f; return FMath::Max(FMath::Abs(Px) * 0.8660254f + FMath::Abs(Py) * 0.5f, FMath::Abs(Py)) / (S * 0.5f) < 0.9f; }
+		void Write(int32 x, int32 y, float Val) { const int32 i = y * S + x; if (Val > V[i]) { V[i] = Val; O[i] = Order; } }
+		void Stamp(float X, float Y, float Radius, float Val)
+		{
+			const int32 X0 = FMath::Max(0, FMath::FloorToInt(X - Radius)), X1 = FMath::Min(S - 1, FMath::CeilToInt(X + Radius));
+			const int32 Y0 = FMath::Max(0, FMath::FloorToInt(Y - Radius)), Y1 = FMath::Min(S - 1, FMath::CeilToInt(Y + Radius));
+			for (int32 y = Y0; y <= Y1; ++y) for (int32 x = X0; x <= X1; ++x)
+			{
+				const float D = FMath::Sqrt((x + 0.5f - X) * (x + 0.5f - X) + (y + 0.5f - Y) * (y + 0.5f - Y));
+				const float A = FMath::Clamp(Radius + 0.5f - D, 0.f, 1.f);
+				if (A > 0 && InHex(x, y)) Write(x, y, Val * A);
+			}
+		}
+		void Line(float X0, float Y0, float X1, float Y1, float Width, float Val)
+		{
+			const float L = FMath::Sqrt((X1 - X0) * (X1 - X0) + (Y1 - Y0) * (Y1 - Y0)); const int32 N = FMath::Max(1, FMath::CeilToInt(L / 0.5f));
+			for (int32 i = 0; i <= N; ++i) { const float t = (float)i / N; Stamp(FMath::Lerp(X0, X1, t), FMath::Lerp(Y0, Y1, t), Width * 0.5f, Val); }
+		}
+		void Rect(float X0, float Y0, float X1, float Y1, float Val)
+		{
+			for (int32 y = FMath::Max(0, (int32)Y0); y < FMath::Min(S, (int32)Y1); ++y) for (int32 x = FMath::Max(0, (int32)X0); x < FMath::Min(S, (int32)X1); ++x) if (InHex(x, y)) Write(x, y, Val);
+		}
+		void Ring(float X, float Y, float R, float W, float Val) { const int32 N = FMath::Max(8, (int32)(R * 6)); for (int32 i = 0; i < N; ++i) { const float A = 2 * PI * i / N; Stamp(X + R * FMath::Cos(A), Y + R * FMath::Sin(A), W * 0.5f, Val); } }
+		// PCB-style route: 45-degree diagonal until aligned, then straight to the target
+		void Route(float X0, float Y0, float X1, float Y1, float Width, float Val)
+		{
+			const float Dx = X1 - X0, Dy = Y1 - Y0; const float D = FMath::Min(FMath::Abs(Dx), FMath::Abs(Dy));
+			const float Mx = X0 + FMath::Sign(Dx) * D, My = Y0 + FMath::Sign(Dy) * D;
+			Line(X0, Y0, Mx, My, Width, Val); Line(Mx, My, X1, Y1, Width, Val);
+		}
+	};
+}
+
 FGLTex FGLTextureKit::Traces(int32 S)
 {
-	FGLTex T = Blank(S, false);
-	const float C = S * 0.5f, R = S * 0.5f;
-	for (int32 Y = 0; Y < S; ++Y) for (int32 X = 0; X < S; ++X)
+	FPlanCanvas Cv(S);
+	const float C = S * 0.5f, K = S / 1024.f;
+	// faint ground-plane via grid (always present)
+	Cv.Order = 0.f;
+	for (int32 y = 24; y < S; y += 32 * K) for (int32 x = 24; x < S; x += 32 * K) if (Cv.InHex(x, y)) Cv.Stamp(x, y, 1.2f * K, 0.14f);
+	// core switch pad (first thing a sector gets)
+	Cv.Order = 0.02f;
+	const float Core = 92.f * K;
+	Cv.Rect(C - Core * 0.5f, C - Core * 0.5f, C + Core * 0.5f, C + Core * 0.5f, 0.35f);
+	for (int32 e = 0; e < 4; ++e) { const float o = Core * 0.5f - 1.5f * K; Cv.Line(C - o, C - o, C + o, C - o, 3.f * K, 1.f); Cv.Line(C + o, C - o, C + o, C + o, 3.f * K, 1.f); Cv.Line(C + o, C + o, C - o, C + o, 3.f * K, 1.f); Cv.Line(C - o, C + o, C - o, C - o, 3.f * K, 1.f); }
+	for (int32 py = 0; py < 4; ++py) for (int32 px = 0; px < 4; ++px) Cv.Rect(C - 30 * K + px * 20 * K, C - 30 * K + py * 20 * K, C - 30 * K + px * 20 * K + 12 * K, C - 30 * K + py * 20 * K + 12 * K, 0.95f);
+	// rack rows: hot/cold aisle pairs
+	const float RackW = 44.f * K, RackH = 24.f * K, Pitch = 56.f * K, RowPitch = 76.f * K;
+	int32 Row = 0;
+	for (float Ry = C - 5.5f * RowPitch; Ry <= C + 5.5f * RowPitch + 1; Ry += RowPitch, ++Row)
 	{
-		const float Px = X - C + 0.5f, Py = Y - C + 0.5f;
-		const float HexD = FMath::Max(FMath::Abs(Px) * 0.8660254f + FMath::Abs(Py) * 0.5f, FMath::Abs(Py)) / R;
-		float Tr = 0.f;
-		const float RingF = FMath::Frac(HexD * 5.f);
-		if (HexD > 0.1f && HexD < 0.93f && (RingF < 0.025f || RingF > 0.975f))
+		const bool Upper = Ry < C;
+		const float TrayY = Upper ? Ry - RackH * 0.5f - 10.f * K : Ry + RackH * 0.5f + 10.f * K;     // cable tray on the aisle side
+		float TrayMin = 1e9f, TrayMax = -1e9f;
+		const float Shift = (Row % 2) * Pitch * 0.5f;
+		for (float Rx = C - 8 * Pitch + Shift; Rx <= C + 8 * Pitch; Rx += Pitch)
 		{
-			const float Ang = FMath::Atan2(Py, Px);
-			const bool Dash = FMath::Frac(Ang / (2 * PI) * 30.f + HexD * 7.f) < 0.7f;      // dashed rings
-			if (Dash || HexD < 0.3f) Tr = 1.f;
+			if (FMath::Abs(Rx - C) < Core * 0.5f + 34 * K && FMath::Abs(Ry - C) < Core * 0.5f + 40 * K) continue;   // keep the core zone clear
+			if (!Cv.InHex(Rx - RackW * 0.55f, Ry - RackH) || !Cv.InHex(Rx + RackW * 0.55f, Ry + RackH)) continue;
+			const int32 Cx = (int32)(Rx / Pitch), Cy = Row;
+			if (Hash(Cx, Cy, 101) < 0.18f) continue;                                                      // empty slot
+			Cv.Order = 0.15f + 0.85f * Hash(Cx, Cy, 113);                                                // racks fill in as the sector develops
+			// rack: filled body, bright outline, a few unit dashes
+			Cv.Rect(Rx - RackW * 0.5f, Ry - RackH * 0.5f, Rx + RackW * 0.5f, Ry + RackH * 0.5f, 0.28f);
+			Cv.Line(Rx - RackW * 0.5f, Ry - RackH * 0.5f, Rx + RackW * 0.5f, Ry - RackH * 0.5f, 2.f * K, 0.9f);
+			Cv.Line(Rx - RackW * 0.5f, Ry + RackH * 0.5f, Rx + RackW * 0.5f, Ry + RackH * 0.5f, 2.f * K, 0.9f);
+			Cv.Line(Rx - RackW * 0.5f, Ry - RackH * 0.5f, Rx - RackW * 0.5f, Ry + RackH * 0.5f, 2.f * K, 0.9f);
+			Cv.Line(Rx + RackW * 0.5f, Ry - RackH * 0.5f, Rx + RackW * 0.5f, Ry + RackH * 0.5f, 2.f * K, 0.9f);
+			const int32 Units = 3 + (int32)(Hash(Cx, Cy, 103) * 4);
+			for (int32 u = 0; u < Units; ++u) { const float ux = Rx - RackW * 0.4f + u * (RackW * 0.8f / Units); Cv.Line(ux, Ry - RackH * 0.25f, ux, Ry + RackH * 0.25f, 1.6f * K, 0.55f); }
+			// stub to the tray + via
+			const float StubY0 = Upper ? Ry - RackH * 0.5f : Ry + RackH * 0.5f;
+			Cv.Line(Rx, StubY0, Rx, TrayY, 2.2f * K, 0.85f);
+			Cv.Ring(Rx, TrayY, 3.2f * K, 1.8f * K, 1.f);
+			// silkscreen label dashes on the far side
+			const float LabY = Upper ? Ry + RackH * 0.5f + 7 * K : Ry - RackH * 0.5f - 7 * K;
+			const int32 Dashes = 2 + (int32)(Hash(Cx, Cy, 107) * 3);
+			for (int32 d = 0; d < Dashes; ++d) Cv.Line(Rx - RackW * 0.4f + d * 9 * K, LabY, Rx - RackW * 0.4f + d * 9 * K + 5 * K, LabY, 1.4f * K, 0.5f);
+			TrayMin = FMath::Min(TrayMin, Rx); TrayMax = FMath::Max(TrayMax, Rx);
 		}
-		// Manhattan routing from pads
-		const int32 G = S / 20; const int32 Gx = X / G, Gy = Y / G; const int32 Ox = X % G, Oy = Y % G;
-		if (HexD < 0.88f)
+		if (TrayMin > TrayMax) continue;
+		// tray along the row, then fan into the core with a 45-degree route (trays come early)
+		Cv.Order = 0.1f;
+		Cv.Line(TrayMin, TrayY, TrayMax, TrayY, 3.f * K, 0.9f);
+		const float Side = (Hash(Row, 3, 109) < 0.5f) ? -1.f : 1.f;
+		const float EndX = Side < 0 ? TrayMin : TrayMax;
+		const float TargetX = C + Side * (Core * 0.5f + 2 * K);
+		const float TargetY = FMath::Clamp(Ry, C - Core * 0.4f, C + Core * 0.4f);
+		if (FMath::Abs(Ry - C) > Core * 0.5f + 20 * K)
 		{
-			if (Hash(Gx, Gy, 31) > 0.8f && Ox > G * 0.3f && Ox < G * 0.7f && Oy > G * 0.3f && Oy < G * 0.7f) Tr = FMath::Max(Tr, 0.95f);   // pad
-			if (Hash(Gx, Gy, 41) > 0.72f && FMath::Abs(Oy - G / 2) < 1.2f) Tr = FMath::Max(Tr, 0.75f);                                 // horizontal run
-			if (Hash(Gx, Gy, 43) > 0.78f && FMath::Abs(Ox - G / 2) < 1.2f) Tr = FMath::Max(Tr, 0.75f);                                 // vertical run
-			if (Hash(Gx, Gy, 47) > 0.9f && Ox > G * 0.2f && Ox < G * 0.8f && (Oy % 4) == 0 && Oy > G * 0.25f && Oy < G * 0.75f) Tr = FMath::Max(Tr, 0.6f); // tick labels
+			// leave the tray at a mid point, route to the core face
+			const float LeaveX = FMath::Clamp(C + Side * (Core * 0.5f + 60 * K + FMath::Abs(Ry - C) * 0.35f), FMath::Min(TrayMin, TrayMax), FMath::Max(TrayMin, TrayMax));
+			Cv.Ring(LeaveX, TrayY, 3.5f * K, 2.f * K, 1.f);
+			Cv.Route(LeaveX, TrayY, TargetX, TargetY, 3.f * K, 0.9f);
+			Cv.Stamp(TargetX, TargetY, 3.5f * K, 1.f);
 		}
-		if (HexD < 0.085f && HexD > 0.055f) Tr = 1.f;
-		if (HexD > 0.955f && HexD < 0.985f && FMath::Frac(FMath::Atan2(Py, Px) / (2 * PI) * 60.f) < 0.5f) Tr = FMath::Max(Tr, 0.5f);   // edge ticks
-		Put(T, X, Y, Tr, Tr, Tr);
+		else { Cv.Line(EndX, TrayY, TargetX, TrayY, 3.f * K, 0.9f); Cv.Stamp(TargetX, TrayY, 3.5f * K, 1.f); }
 	}
+	// a few decoupling-capacitor pairs and test points for texture (late additions)
+	Cv.Order = 0.7f;
+	for (int32 i = 0; i < 40; ++i)
+	{
+		const float x = Hash(i, 1, 131) * S, y = Hash(i, 2, 131) * S;
+		if (!Cv.InHex(x, y) || FMath::Abs(x - C) < Core || FMath::Abs(y - C) < Core * 0.6f) continue;
+		if (Cv.V[(int32)y * S + (int32)x] > 0.2f) continue;
+		Cv.Stamp(x, y, 2.5f * K, 0.8f); Cv.Stamp(x + 7 * K, y, 2.5f * K, 0.8f); Cv.Line(x, y, x + 7 * K, y, 1.5f * K, 0.6f);
+	}
+	FGLTex T = Blank(S, false);
+	for (int32 Y = 0; Y < S; ++Y) for (int32 X = 0; X < S; ++X) { const float v = FMath::Clamp(Cv.V[Y * S + X], 0.f, 1.f); Put(T, X, Y, v, Cv.O[Y * S + X], v); }
 	return T;
 }
 

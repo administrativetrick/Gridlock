@@ -153,7 +153,12 @@ float4 sg = Texture2DSample(Sign, SignSampler, suv);
 float band = step(0.74, frac(WP.z / 150.0 + Seed * 0.53));
 float3 sigCol = sg.g < 0.25 ? float3(0.0, 0.9, 1.0) : (sg.g < 0.5 ? float3(1.0, 0.2, 0.8) : (sg.g < 0.75 ? float3(1.0, 0.55, 0.1) : float3(0.5, 1.0, 0.2)));
 float sig = sg.r * band * wall * SignStrength * saturate(glowMag * 1.4) * (0.75 + 0.25 * sin(T * 4.0 + Seed * 7.0 + sg.g * 20.0));
-float tr = Texture2DSample(Traces, TracesSampler, UV).r * TraceStrength * saturate(an.z * 2.0);
+float2 ruv = UV - 0.5;
+float cr = cos(TraceRot), sr = sin(TraceRot);
+ruv = float2(ruv.x * cr - ruv.y * sr, ruv.x * sr + ruv.y * cr) + 0.5;
+float2 trs = Texture2DSample(Traces, TracesSampler, ruv).rg;
+float built = saturate((Develop - trs.g) * 12.0 + 0.5);          // elements appear in build order as the sector develops
+float tr = trs.r * built * TraceStrength * saturate(an.z * 2.0);
 Emis = winCol * lit * 3.0 + sigCol * sig * 4.0 + Glow * tr;
 WNrm = normalize(N + dn * 0.65);
 Metal = metal;
@@ -161,7 +166,7 @@ AO = ao;
 return float4(alb, rough);
 )HLSL");
 
-	struct FSurfaceInputs { UMaterialExpression* Glow; UMaterialExpression* Seed; UMaterialExpression* WindowStrength; UMaterialExpression* TraceStrength; UMaterialExpression* SignStrength; UMaterialExpression* MetalMix; UMaterialExpression* Wet; };
+	struct FSurfaceInputs { UMaterialExpression* Glow; UMaterialExpression* Seed; UMaterialExpression* WindowStrength; UMaterialExpression* TraceStrength; UMaterialExpression* SignStrength; UMaterialExpression* MetalMix; UMaterialExpression* Wet; UMaterialExpression* TraceRot; UMaterialExpression* Develop; };
 
 	UMaterialExpressionCustom* SurfaceNode(UMaterial* M, const FTexSet& Tx, const FSurfaceInputs& In)
 	{
@@ -175,7 +180,7 @@ return float4(alb, rough);
 		auto Add = [&](const TCHAR* Name, UMaterialExpression* E) { FCustomInput I; I.InputName = Name; I.Input.Connect(0, E); C->Inputs.Add(I); };
 		Add(TEXT("WP"), WP); Add(TEXT("N"), N); Add(TEXT("UV"), UV); Add(TEXT("T"), Tm);
 		Add(TEXT("Glow"), In.Glow); Add(TEXT("Seed"), In.Seed); Add(TEXT("WindowStrength"), In.WindowStrength); Add(TEXT("TraceStrength"), In.TraceStrength);
-		Add(TEXT("SignStrength"), In.SignStrength); Add(TEXT("MetalMix"), In.MetalMix); Add(TEXT("Wet"), In.Wet);
+		Add(TEXT("SignStrength"), In.SignStrength); Add(TEXT("MetalMix"), In.MetalMix); Add(TEXT("Wet"), In.Wet); Add(TEXT("TraceRot"), In.TraceRot); Add(TEXT("Develop"), In.Develop);
 		Add(TEXT("ConcA"), TexObj(M, -900, Tx.ConcA)); Add(TEXT("ConcM"), TexObj(M, -800, Tx.ConcM)); Add(TEXT("ConcN"), TexObj(M, -700, Tx.ConcN));
 		Add(TEXT("MetM"), TexObj(M, -600, Tx.MetM)); Add(TEXT("MetN"), TexObj(M, -500, Tx.MetN));
 		Add(TEXT("Grime"), TexObj(M, -400, Tx.Grime)); Add(TEXT("Win"), TexObj(M, -300, Tx.Win)); Add(TEXT("Sign"), TexObj(M, -200, Tx.Sign)); Add(TEXT("Traces"), TexObj(M, -100, Tx.Traces));
@@ -218,12 +223,14 @@ return float4(alb, rough);
 		auto* SgS = Expr<UMaterialExpressionScalarParameter>(M, -1600, 1000); SgS->ParameterName = TEXT("SignStrength"); SgS->DefaultValue = 0.f;
 		auto* MMix = Expr<UMaterialExpressionScalarParameter>(M, -1600, 1100); MMix->ParameterName = TEXT("MetalMix"); MMix->DefaultValue = 0.f;
 		auto* Wet = Expr<UMaterialExpressionScalarParameter>(M, -1600, 1200); Wet->ParameterName = TEXT("Wet"); Wet->DefaultValue = 0.f;
+		auto* TRot = Expr<UMaterialExpressionScalarParameter>(M, -1600, 1300); TRot->ParameterName = TEXT("TraceRot"); TRot->DefaultValue = 0.f;
+		auto* Dev = Expr<UMaterialExpressionScalarParameter>(M, -1600, 1400); Dev->ParameterName = TEXT("Develop"); Dev->DefaultValue = 1.f;
 		auto* Seed = Expr<UMaterialExpressionConstant>(M, -1600, 900); Seed->R = 0.f;
 		UMaterialExpression* Rim = BuildRim(M, Wid);
 		auto* RimPlus = Expr<UMaterialExpressionAdd>(M, -150, 300); RimPlus->A.Connect(0, Rim); RimPlus->B.Connect(0, Fill);
 		auto* Glow = Expr<UMaterialExpressionMultiply>(M, -150, 60); Glow->A.Connect(0, Emis); Glow->B.Connect(0, Str);
 		auto* RimGlow = Expr<UMaterialExpressionMultiply>(M, -50, 150); RimGlow->A.Connect(0, Glow); RimGlow->B.Connect(0, RimPlus);
-		UMaterialExpressionCustom* S = SurfaceNode(M, Tx, FSurfaceInputs{ Glow, Seed, WinS, TrS, SgS, MMix, Wet });
+		UMaterialExpressionCustom* S = SurfaceNode(M, Tx, FSurfaceInputs{ Glow, Seed, WinS, TrS, SgS, MMix, Wet, TRot, Dev });
 		WireSurface(M, S, Color, Met, Rgh, RimGlow);
 		return SaveMat(Pkg, M);
 	}
@@ -240,13 +247,15 @@ return float4(alb, rough);
 		auto* SgS = Expr<UMaterialExpressionConstant>(M, -1600, 1000); SgS->R = 1.f;
 		auto* MMix = Expr<UMaterialExpressionConstant>(M, -1600, 1100); MMix->R = 0.1f;
 		auto* Wet = Expr<UMaterialExpressionConstant>(M, -1600, 1200); Wet->R = 0.f;
+		auto* TRot = Expr<UMaterialExpressionConstant>(M, -1600, 1300); TRot->R = 0.f;
+		auto* Dev = Expr<UMaterialExpressionConstant>(M, -1600, 1400); Dev->R = 1.f;
 		auto* Met = Expr<UMaterialExpressionConstant>(M, -400, 500); Met->R = 0.02f;
 		auto* Rgh = Expr<UMaterialExpressionConstant>(M, -400, 600); Rgh->R = 1.f;
 		UMaterialExpression* Rim = BuildRim(M, Wid);
 		auto* RimPlus = Expr<UMaterialExpressionAdd>(M, -150, 300); RimPlus->A.Connect(0, Rim); RimPlus->B.Connect(0, Fill);
 		auto* Glow = Expr<UMaterialExpressionMultiply>(M, -150, 60); Glow->A.Connect(0, RGB); Glow->B.Connect(0, CD3);
 		auto* RimGlow = Expr<UMaterialExpressionMultiply>(M, -50, 150); RimGlow->A.Connect(0, Glow); RimGlow->B.Connect(0, RimPlus);
-		UMaterialExpressionCustom* S = SurfaceNode(M, Tx, FSurfaceInputs{ Glow, Seed, WinS, TrS, SgS, MMix, Wet });
+		UMaterialExpressionCustom* S = SurfaceNode(M, Tx, FSurfaceInputs{ Glow, Seed, WinS, TrS, SgS, MMix, Wet, TRot, Dev });
 		WireSurface(M, S, Tint, Met, Rgh, RimGlow);
 		return SaveMat(Pkg, M);
 	}

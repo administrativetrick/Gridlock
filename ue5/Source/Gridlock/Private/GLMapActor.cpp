@@ -186,6 +186,31 @@ void AGLMapActor::RefreshHexes()
 		M->SetVectorParameterValue(TEXT("Color"), Base);
 		M->SetVectorParameterValue(TEXT("Emissive"), Glow);
 		M->SetScalarParameterValue(TEXT("EmissiveStrength"), Str);
+		// the floor plan builds out with the sector: core pad first, then trays, then racks as structures arrive
+		float Dev = 0.f;
+		auto Seen = H.seen.find(Me);
+		if (H.type == gl::Sector::Exchange) Dev = 1.f;
+		else if (Vis || Seen != H.seen.end())
+		{
+			const int32 OwnerSid = Vis ? H.owner : Seen->second.owner;
+			const double Integ = Vis ? H.C : Seen->second.C;
+			if (OwnerSid >= 0) Dev = 0.12f + 0.22f * (float)(Integ / 100.0);
+			for (const gl::Structure& St : S.structs)
+			{
+				if (!St.alive || !St.built || St.hex != H.id || !GM->Sim().AssetVisible(Me, St)) continue;
+				switch (St.kind)
+				{
+				case gl::StructKind::Node: Dev += 0.2f * St.tier; break;
+				case gl::StructKind::Substation: case gl::StructKind::PrivateGrid: Dev += 0.12f; break;
+				case gl::StructKind::Repeater: Dev += 0.08f; break;
+				case gl::StructKind::Rack: Dev += 0.2f; break;
+				case gl::StructKind::Lab: Dev += 0.1f; break;
+				default: Dev += 0.05f; break;
+				}
+			}
+		}
+		M->SetScalarParameterValue(TEXT("Develop"), FMath::Clamp(Dev, 0.f, 1.f));
+		M->SetScalarParameterValue(TEXT("TraceRot"), (float)(H.id % 6) * 1.0471976f);
 	}
 }
 

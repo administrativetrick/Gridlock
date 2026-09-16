@@ -40,8 +40,12 @@ Regenerates every asset from code: the tileable PBR textures (`ue5/Content/Textu
 synthesised by `GLTextureKit` from gradient noise with domain warping and cellular noise: 1024²
 concrete colour / masks / normal with two-level panels, bolt dents, chipped seams, cracks and rust
 streaks; a riveted, scratched metal set with hazard stripes; grime with puddle masks; a window-cell
-atlas with frames, spandrels, blinds, curtains and three hue families; neon signage glyph bars; and
-routed circuit traces for tile tops), the materials (`ue5/Content/Materials/M_Neon`, `M_NeonInst`,
+atlas with frames, spandrels, blinds, curtains and three hue families; neon signage glyph bars; and a
+datacenter floor plan drawn as a circuit board for the tile tops: rack rows with hot and cold
+aisles, cable trays, 45°-routed traces into a core switch pad, vias, silkscreen labels and a
+ground-plane via grid, with a build-order channel so a sector's plan fills in as it develops:
+core pad on claim, trays with integrity, racks as nodes, substations, racks and labs are built),
+the materials (`ue5/Content/Materials/M_Neon`, `M_NeonInst`,
 `M_GlowInst`, `M_Holo`, whose surface is a custom HLSL node blending concrete and metal tri-planar in
 world space with a world-space normal, puddle wetness, flickering lit windows, animated signage bands
 and owner-coloured traces) and the procedural kitbash library (`ue5/Content/Meshes/SM_*`: towers, slabs, arcologies,
