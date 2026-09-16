@@ -53,14 +53,39 @@ factories, docks, sprawl, undercity, the Exchange spire, every infrastructure pr
 and the bevelled hex tile, all built by `GLMeshKit`). The assets are committed, so this is only
 needed after editing `GLTextureKit.cpp`, `GLMeshKit.cpp` or `GLMaterialCommandlet.cpp`.
 
+```bat
+package.bat
+```
+
+Produces the standalone game: `dist\Windows\Gridlock.exe` plus its `Gridlock\` folder, playable
+on any Windows 10/11 machine without Unreal installed (the `Engine\Extras\Redist` prerequisites
+installer is included). `package.bat shipping` builds the Shipping configuration instead. Under the
+hood this is `RunUAT BuildCookRun -build -cook -stage -pak -prereqs -archive`; the generated
+Materials/Meshes/Textures folders and `/Engine/BasicShapes` are listed in `DefaultGame.ini` as
+always-cook directories because the client loads them by path rather than through a map reference.
+
+The startup splash is `ue5/Content/Splash/Splash.bmp` and the executable icon is
+`ue5/Build/Windows/Application.ico`; both are drawn by a small Pillow script and replace the Unreal
+defaults. After the window opens, `UGLGameInstance` shows a Slate loading card through the movie
+player (title, progress rail, status line) while the world loads and the city is generated, so the
+engine's black first frame is never seen.
+
 ## Play
+
+```bat
+dist\Windows\Gridlock.exe
+```
+
+The packaged executable is the game. It accepts the same options as the dev launcher, for
+example `Gridlock.exe -arch=ghost -seed=nightfall -windowed -resx=1600 -resy=900`.
 
 ```bat
 run.bat hegemony
 ```
 
-`run.bat [hegemony|ghost|hive] [seed]` launches the UE5 client as a standalone window. Press
-**F1** in game for the key map; **V** opens the Board Room; **Space** ends the cycle.
+`run.bat [hegemony|ghost|hive] [seed]` launches the same client through the editor binary as a
+standalone window, for development without repackaging. Press **F1** in game for the key map;
+**F3** lists every control; **V** opens the Board Room; **Space** ends the cycle.
 
 The design's core loop in play: click a hex in your network, press **L**, click a destination
 to lay fiber (rights are bought along the route and the projected survival is shown). Watch the

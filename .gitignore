@@ -15,4 +15,11 @@ Saved/
 *.suo
 *.xcodeproj
 *.xcworkspace
-build/
+/build/
+
+# packaged builds (package.bat)
+dist/
+
+# UAT scratch inside the UE Build folder
+ue5/Build/**/FileOpenOrder/
+ue5/Build/Receipts/

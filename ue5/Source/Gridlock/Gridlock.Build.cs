@@ -13,7 +13,7 @@ public class Gridlock : ModuleRules
 
 		PublicDependencyModuleNames.AddRange(new string[] {
 			"Core", "CoreUObject", "Engine", "InputCore",
-			"Slate", "SlateCore",
+			"Slate", "SlateCore", "MoviePlayer",
 			"MeshDescription", "StaticMeshDescription"
 		});
 
