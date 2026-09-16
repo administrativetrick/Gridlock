@@ -24,15 +24,16 @@ public:
 	EGLMode Mode = EGLMode::Select;
 	int32 BuildKind = -1; int32 BuildTier = 1; int32 OpKind = -1;
 	int32 Sel = -1; int32 FromHex = -1;
-	bool bHelp = false; bool bBoard = false; bool bResearch = false; bool bDoctrine = false; bool bGuide = true;
+	bool bHelp = false; bool bBoard = false; bool bResearch = false; bool bDoctrine = false; bool bGuide = true; bool bControls = false;
 	void ToggleGuide() { bGuide = !bGuide; }
+	void ToggleControls() { bControls = !bControls; bHelp = false; }
 	FString LastMsg;
 	FString ModeText() const;
 
 	AGLGameMode* GM() const;
 	void OnEndCycle();
 	void OnCancel();
-	void ToggleHelp() { bHelp = !bHelp; }
+	void ToggleHelp() { bHelp = !bHelp; bControls = false; }
 	void ToggleBoard() { bBoard = !bBoard; bResearch = bDoctrine = false; }
 	void ToggleResearch() { bResearch = !bResearch; bBoard = bDoctrine = false; }
 	void ToggleDoctrine() { bDoctrine = !bDoctrine; bBoard = bResearch = false; }

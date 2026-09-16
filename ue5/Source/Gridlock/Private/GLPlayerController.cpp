@@ -39,6 +39,7 @@ void AGLPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AGLPlayerController::OnCancel);
 	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &AGLPlayerController::ToggleHelp);
 	InputComponent->BindKey(EKeys::F2, IE_Pressed, this, &AGLPlayerController::ToggleGuide);
+	InputComponent->BindKey(EKeys::F3, IE_Pressed, this, &AGLPlayerController::ToggleControls);
 	InputComponent->BindKey(EKeys::V, IE_Pressed, this, &AGLPlayerController::ToggleBoard);
 	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &AGLPlayerController::ToggleResearch);
 	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AGLPlayerController::ToggleDoctrine);
@@ -184,7 +185,7 @@ void AGLPlayerController::HandleHexClick(int32 Hex)
 }
 
 void AGLPlayerController::OnEndCycle() { if (AGLGameMode* G = GM()) { G->EndCycle(); LastMsg = FString::Printf(TEXT("Cycle %d resolved."), G->Sim().S().cycle); Sync(); } }
-void AGLPlayerController::OnCancel() { Mode = EGLMode::Select; FromHex = -1; LastMsg.Empty(); bBoard = bResearch = bDoctrine = false; Sync(); }
+void AGLPlayerController::OnCancel() { Mode = EGLMode::Select; FromHex = -1; LastMsg.Empty(); bBoard = bResearch = bDoctrine = bControls = bHelp = false; Sync(); }
 void AGLPlayerController::SetLay() { Mode = EGLMode::Lay; FromHex = -1; LastMsg.Empty(); Sync(); }
 void AGLPlayerController::SetBuild(int32 Kind, int32 Tier) { Mode = EGLMode::Build; BuildKind = Kind; BuildTier = Tier; LastMsg.Empty(); Sync(); }
 void AGLPlayerController::SetOp(int32 Kind) { Mode = EGLMode::Op; OpKind = Kind; LastMsg.Empty(); Sync(); }

@@ -72,6 +72,7 @@ void SGLHud::Construct(const FArguments& InArgs)
 			+ SOverlay::Slot() [ SNew(SBox).Visibility(VisResearch).WidthOverride(820).MaxDesiredHeight(640) [ Panel(SNew(SScrollBox) + SScrollBox::Slot() [ SAssignNew(ResearchBox, SVerticalBox) ]) ] ]
 			+ SOverlay::Slot() [ SNew(SBox).Visibility(VisDoctrine).WidthOverride(700) [ Panel(SAssignNew(DoctrineBox, SVerticalBox)) ] ]
 			+ SOverlay::Slot() [ SNew(SBox).Visibility(VisHelp).WidthOverride(720) [ HelpPanel() ] ]
+			+ SOverlay::Slot() [ SNew(SBox).Visibility_Lambda([this]() { return (PC && PC->bControls) ? EVisibility::Visible : EVisibility::Collapsed; }).WidthOverride(620) [ ControlsPanel() ] ]
 			+ SOverlay::Slot() [ GameOverBanner() ]
 		]
 	];
@@ -81,7 +82,7 @@ void SGLHud::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime,
 {
 	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
 	AGLGameMode* G = GM(); if (!G || !PC) return;
-	const int32 Flags = (PC->bBoard ? 1 : 0) | (PC->bResearch ? 2 : 0) | (PC->bDoctrine ? 4 : 0) | (PC->bGuide ? 8 : 0) | (PC->bHelp ? 16 : 0);
+	const int32 Flags = (PC->bBoard ? 1 : 0) | (PC->bResearch ? 2 : 0) | (PC->bDoctrine ? 4 : 0) | (PC->bGuide ? 8 : 0) | (PC->bHelp ? 16 : 0) | (PC->bControls ? 32 : 0);
 	if (G->Version != SeenVersion || PC->Sel != SeenSel || PC->Mode != SeenMode || PC->FromHex != SeenFrom || Flags != SeenFlags)
 	{
 		SeenVersion = G->Version; SeenSel = PC->Sel; SeenMode = PC->Mode; SeenFrom = PC->FromHex; SeenFlags = Flags;
@@ -94,11 +95,13 @@ TSharedRef<SWidget> SGLHud::Panel(TSharedRef<SWidget> Content, float Pad) { retu
 TSharedRef<SWidget> SGLHud::Head(const FString& S) { return SNew(SBorder).BorderImage(&HeadBrush).Padding(FMargin(6, 2)) [ SNew(STextBlock).Text(T(S)).Font(F12).ColorAndOpacity(FSlateColor(kCyan)) ]; }
 TSharedRef<SWidget> SGLHud::Txt(TAttribute<FText> Tx, const FSlateFontInfo& F, TAttribute<FSlateColor> C, bool Wrap) { return SNew(STextBlock).Text(Tx).Font(F).ColorAndOpacity(C).AutoWrapText(Wrap); }
 TSharedRef<SWidget> SGLHud::Txt(const FString& S, const FSlateFontInfo& F, const FLinearColor& C, bool Wrap) { return SNew(STextBlock).Text(T(S)).Font(F).ColorAndOpacity(FSlateColor(C)).AutoWrapText(Wrap); }
-TSharedRef<SWidget> SGLHud::Btn(const FString& Label, TFunction<void()> Fn, const FSlateFontInfo* Font, TAttribute<FSlateColor> Fg)
+TSharedRef<SWidget> SGLHud::Btn(const FString& Label, TFunction<void()> Fn, const FSlateFontInfo* Font, TAttribute<FSlateColor> Fg, const FString& Tip)
 {
 	if (!Fg.IsSet()) Fg = FSlateColor(kInk);
-	return SNew(SButton).ButtonStyle(&BtnStyle).IsFocusable(false).OnClicked_Lambda([Fn]() { Fn(); return FReply::Handled(); })
+	TSharedRef<SButton> B = SNew(SButton).ButtonStyle(&BtnStyle).IsFocusable(false).OnClicked_Lambda([Fn]() { Fn(); return FReply::Handled(); })
 		[ SNew(STextBlock).Text(T(Label)).Font(Font ? *Font : F10).ColorAndOpacity(Fg) ];
+	if (!Tip.IsEmpty()) B->SetToolTipText(T(Tip));
+	return B;
 }
 TSharedRef<SWidget> SGLHud::Gauge(TAttribute<TOptional<float>> Pct, TAttribute<FSlateColor> Fill, float Height)
 {
@@ -171,38 +174,94 @@ TSharedRef<SWidget> SGLHud::Toolbar()
 {
 	TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
 	auto Add = [&](TSharedRef<SWidget> W) { Box->AddSlot().AutoHeight().Padding(0, 2) [ W ]; };
-	Add(Btn(TEXT("Lay fiber  [L]"), [this]() { PC->SetLay(); }));
-	Add(Btn(TEXT("Build  >"), [this]() { bBuildMenu = !bBuildMenu; bOpsMenu = false; }));
+	auto Tool = [&](const TCHAR* Label, TFunction<void()> Fn, const TCHAR* Tip) { Add(Btn(Label, Fn, nullptr, TAttribute<FSlateColor>(), Tip)); };
+	Tool(TEXT("Lay Fiber"), [this]() { PC->SetLay(); }, TEXT("Extend your network. Click a hex you hold, then the destination; conduit rights are bought along the route and the projected bandwidth survival is shown.\nHotkey: L"));
+	Tool(TEXT("Build  >"), [this]() { bBuildMenu = !bBuildMenu; bOpsMenu = false; }, TEXT("Structures for a sector you control: nodes make bandwidth, substations power them, repeaters reset hop loss, racks peer at Exchanges, outposts and arrays defend and watch."));
 	TSharedRef<SVerticalBox> BuildMenu = SNew(SVerticalBox);
 	BuildMenu->SetVisibility(Attr<EVisibility>([this]() { return bBuildMenu ? EVisibility::Visible : EVisibility::Collapsed; }));
-	struct FB { const TCHAR* Label; int32 Kind; int32 Tier; };
+	struct FB { const TCHAR* Label; int32 Kind; int32 Tier; const TCHAR* Key; const TCHAR* Tip; };
 	const FB Builds[] = {
-		{ TEXT("Edge Node  T1  [1]"), (int32)gl::StructKind::Node, 1 }, { TEXT("Core Node  T2  [2]"), (int32)gl::StructKind::Node, 2 }, { TEXT("Hyperscale  T3  [3]"), (int32)gl::StructKind::Node, 3 },
-		{ TEXT("Substation  [4]"), (int32)gl::StructKind::Substation, 0 }, { TEXT("Repeater  [5]"), (int32)gl::StructKind::Repeater, 0 }, { TEXT("Peering Rack  [6]"), (int32)gl::StructKind::Rack, 0 },
-		{ TEXT("Security Outpost  [7]"), (int32)gl::StructKind::Outpost, 0 }, { TEXT("Surveillance Array  [8]"), (int32)gl::StructKind::Array, 0 }, { TEXT("Lab  [9]"), (int32)gl::StructKind::Lab, 0 },
-		{ TEXT("Honeypot  [0]"), (int32)gl::StructKind::Honeypot, 0 }, { TEXT("Private Grid"), (int32)gl::StructKind::PrivateGrid, 0 }, { TEXT("Tap"), (int32)gl::StructKind::Tap, 0 }, { TEXT("Cutout"), (int32)gl::StructKind::Cutout, 0 }, { TEXT("Model Fork"), (int32)gl::StructKind::Fork, 0 } };
-	for (const FB& B : Builds) { const int32 K = B.Kind, Tr = B.Tier; const double Cost = K == (int32)gl::StructKind::Node ? gl::nodeDef(Tr).cost : gl::structDef((gl::StructKind)K).cost; BuildMenu->AddSlot().AutoHeight().Padding(12, 1, 0, 1) [ Btn(FString::Printf(TEXT("%s   %.0f"), B.Label, Cost), [this, K, Tr]() { PC->SetBuild(K, Tr); bBuildMenu = false; }, &F9) ]; }
+		{ TEXT("Edge Node"), (int32)gl::StructKind::Node, 1, TEXT("1"), TEXT("Tier 1 node: 12 bandwidth, 2 MW. The cheapest way to feed a starving branch.") },
+		{ TEXT("Core Node"), (int32)gl::StructKind::Node, 2, TEXT("2"), TEXT("Tier 2 node: 30 bandwidth, 6 MW.") },
+		{ TEXT("Hyperscale"), (int32)gl::StructKind::Node, 3, TEXT("3"), TEXT("Tier 3 node: 75 bandwidth, 15 MW. Needs Modular Datacenters research and an Industrial or Campus hex.") },
+		{ TEXT("Substation"), (int32)gl::StructKind::Substation, 0, TEXT("4"), TEXT("10 MW to nodes within 2 hexes. Without one a node buys grid power at 5 Capital per MW every cycle.") },
+		{ TEXT("Repeater"), (int32)gl::StructKind::Repeater, 0, TEXT("5"), TEXT("Resets the hop counter so loss stops climbing along a long chain.") },
+		{ TEXT("Peering Rack"), (int32)gl::StructKind::Rack, 0, TEXT("6"), TEXT("Built in an Exchange your fiber reaches. Lets you sell surplus bandwidth and gives long-range reach for operations.") },
+		{ TEXT("Security Outpost"), (int32)gl::StructKind::Outpost, 0, TEXT("7"), TEXT("Defends against Raids within 1 hex and lets you Raid within 2 (needs Field Teams research).") },
+		{ TEXT("Surveillance Array"), (int32)gl::StructKind::Array, 0, TEXT("8"), TEXT("Reveals every rival's presence in this sector and its neighbours each cycle.") },
+		{ TEXT("Lab"), (int32)gl::StructKind::Lab, 0, TEXT("9"), TEXT("One more research slot. Must share a hex with one of your nodes.") },
+		{ TEXT("Honeypot"), (int32)gl::StructKind::Honeypot, 0, TEXT("0"), TEXT("Catches the first intrusion each cycle, identifies the attacker and adds to their Exposure. Needs Honeypots research.") },
+		{ TEXT("Private Grid"), (int32)gl::StructKind::PrivateGrid, 0, TEXT(""), TEXT("Hegemony only: 20 MW substation on an Industrial hex.") },
+		{ TEXT("Tap"), (int32)gl::StructKind::Tap, 0, TEXT(""), TEXT("Ghost only: leeches 20% of rival fiber flow through a hex where you hold presence 40 or more.") },
+		{ TEXT("Cutout"), (int32)gl::StructKind::Cutout, 0, TEXT(""), TEXT("Ghost only: a front company that makes the sector read as neutral to rivals and the Bureau.") },
+		{ TEXT("Model Fork"), (int32)gl::StructKind::Fork, 0, TEXT(""), TEXT("Hive only: absorbs one large Model Quality loss.") } };
+	for (const FB& B : Builds)
+	{
+		const int32 K = B.Kind, Tr = B.Tier; const double Cost = K == (int32)gl::StructKind::Node ? gl::nodeDef(Tr).cost : gl::structDef((gl::StructKind)K).cost;
+		const FString Tip = FString::Printf(TEXT("%s\nCost %.0f Capital.%s%s"), B.Tip, Cost, *B.Key ? TEXT("\nHotkey: ") : TEXT(""), B.Key);
+		BuildMenu->AddSlot().AutoHeight().Padding(12, 1, 0, 1) [ Btn(FString::Printf(TEXT("%s   %.0f"), B.Label, Cost), [this, K, Tr]() { PC->SetBuild(K, Tr); bBuildMenu = false; }, &F9, TAttribute<FSlateColor>(), Tip) ];
+	}
 	Add(BuildMenu);
-	Add(Btn(TEXT("Operations  >"), [this]() { bOpsMenu = !bOpsMenu; bBuildMenu = false; }));
+	Tool(TEXT("Operations  >"), [this]() { bOpsMenu = !bOpsMenu; bBuildMenu = false; }, TEXT("Cyber and physical operations against a hex. Attack ops cost bandwidth and add Exposure; defensive ops work on your own sectors."));
 	TSharedRef<SVerticalBox> OpsMenu = SNew(SVerticalBox);
 	OpsMenu->SetVisibility(Attr<EVisibility>([this]() { return bOpsMenu ? EVisibility::Visible : EVisibility::Collapsed; }));
+	static const TCHAR* OpKeys[] = { TEXT("C"), TEXT("I"), TEXT("H"), TEXT("P"), TEXT("K"), TEXT("J"), TEXT("R"), TEXT("D"), TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT("N"), TEXT(""), TEXT("") };
 	for (int32 i = 0; i < (int32)gl::OpKind::COUNT; ++i)
 	{
 		const gl::OpDef& D = gl::opDef((gl::OpKind)i);
 		if ((gl::OpKind)i == gl::OpKind::Repair || (gl::OpKind)i == gl::OpKind::Oracle || (gl::OpKind)i == gl::OpKind::Retrain) continue;
-		OpsMenu->AddSlot().AutoHeight().Padding(12, 1, 0, 1) [ Btn(FString::Printf(TEXT("%s   %s%.0f  X%.0f"), UTF8_TO_TCHAR(D.name), D.bw > 0 ? TEXT("BW ") : TEXT("C "), D.bw > 0 ? D.bw : D.capital, D.x), [this, i]() { PC->SetOp(i); bOpsMenu = false; }, &F9) ];
+		const FString Tip = FString::Printf(TEXT("%s\nCosts %.0f %s, Exposure +%.0f.%s%s"), UTF8_TO_TCHAR(D.desc), D.bw > 0 ? D.bw : D.capital, D.bw > 0 ? TEXT("bandwidth") : TEXT("Capital"), D.x, *OpKeys[i] ? TEXT("\nHotkey: ") : TEXT(""), OpKeys[i]);
+		OpsMenu->AddSlot().AutoHeight().Padding(12, 1, 0, 1) [ Btn(UTF8_TO_TCHAR(D.name), [this, i]() { PC->SetOp(i); bOpsMenu = false; }, &F9, TAttribute<FSlateColor>(), Tip) ];
 	}
 	Add(OpsMenu);
-	Add(Btn(TEXT("Research  [T]"), [this]() { PC->ToggleResearch(); }));
-	Add(Btn(TEXT("Doctrine  [M]"), [this]() { PC->ToggleDoctrine(); }));
-	Add(Btn(TEXT("Board Room  [V]"), [this]() { PC->ToggleBoard(); }));
-	Add(Btn(TEXT("Buy 10 BW  [B]"), [this]() { PC->BuyBW(); }));
-	Add(Btn(TEXT("Find Exchange  [F]"), [this]() { PC->FocusExchange(); }));
-	Add(Btn(TEXT("Recentre  [Home]"), [this]() { PC->Recenter(); }));
-	Add(Btn(TEXT("Guide  [F2]"), [this]() { PC->ToggleGuide(); }));
-	Add(Btn(TEXT("Help  [F1]"), [this]() { PC->ToggleHelp(); }));
-	Add(Btn(TEXT("Cancel  [Esc]"), [this]() { PC->OnCancel(); }, nullptr, FSlateColor(kDim)));
+	Tool(TEXT("Research"), [this]() { PC->ToggleResearch(); }, TEXT("The technology tree. Research is funded by compute allocated at your nodes.\nHotkey: T"));
+	Tool(TEXT("Doctrine"), [this]() { PC->ToggleDoctrine(); }, TEXT("Your archetype's policies, bought with Mandate granted at each Board Review (every 12 cycles).\nHotkey: M"));
+	Tool(TEXT("Board Room"), [this]() { PC->ToggleBoard(); }, TEXT("Public valuations, your progress on every victory path, districts, cartels and the victory verbs.\nHotkey: V"));
+	Tool(TEXT("Buy Bandwidth"), [this]() { PC->BuyBW(); }, TEXT("Buy 10 bandwidth at an Exchange for 4 Capital each. It arrives there next cycle and routes out over your fiber, so it can bridge a shortfall.\nRequires a Peering Rack at an Exchange you are connected to.\nHotkey: B"));
+	Tool(TEXT("Find Exchange"), [this]() { PC->FocusExchange(); }, TEXT("Fly the camera to the Exchange nearest your Crown Node and select it.\nHotkey: F"));
+	Tool(TEXT("Recentre Camera"), [this]() { PC->Recenter(); }, TEXT("Return the camera to your Crown Node.\nHotkey: Home"));
+	Tool(TEXT("Guide"), [this]() { PC->ToggleGuide(); }, TEXT("Show or hide the step-by-step opening guide.\nHotkey: F2"));
+	Tool(TEXT("How to Play"), [this]() { PC->ToggleHelp(); }, TEXT("The rules on one page.\nHotkey: F1"));
+	Tool(TEXT("Controls"), [this]() { PC->ToggleControls(); }, TEXT("Every key and mouse binding.\nHotkey: F3"));
+	Add(Btn(TEXT("Cancel"), [this]() { PC->OnCancel(); }, nullptr, FSlateColor(kDim), TEXT("Leave the current mode and close any window.\nHotkey: Esc or right-click")));
 	return Panel(Box, 6.f);
+}
+
+TSharedRef<SWidget> SGLHud::ControlsPanel()
+{
+	TSharedRef<SVerticalBox> B = SNew(SVerticalBox);
+	B->AddSlot().AutoHeight().Padding(0, 0, 0, 6) [ Head(TEXT("CONTROLS")) ];
+	auto Row = [&](const TCHAR* Key, const TCHAR* What) { B->AddSlot().AutoHeight().Padding(0, 1) [ SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth() [ SNew(SBox).WidthOverride(190) [ Txt(Key, F10, kCyan) ] ]
+		+ SHorizontalBox::Slot().FillWidth(1) [ Txt(What, F10, kInk, true) ] ]; };
+	auto Sect = [&](const TCHAR* S) { B->AddSlot().AutoHeight().Padding(0, 8, 0, 2) [ Txt(S, F12, kInk) ]; };
+	Sect(TEXT("Camera"));
+	Row(TEXT("Middle mouse + drag"), TEXT("Pan the map"));
+	Row(TEXT("Arrow keys  /  W A S E"), TEXT("Pan the map"));
+	Row(TEXT("Mouse wheel"), TEXT("Zoom"));
+	Row(TEXT("Home"), TEXT("Recentre on your Crown Node"));
+	Row(TEXT("F"), TEXT("Fly to the nearest Exchange"));
+	Sect(TEXT("Turn and selection"));
+	Row(TEXT("Left click"), TEXT("Select a hex, or confirm the target of the current mode"));
+	Row(TEXT("Space  /  Enter"), TEXT("End the cycle"));
+	Row(TEXT("Esc  /  right click"), TEXT("Cancel the current mode, close windows"));
+	Row(TEXT("X"), TEXT("Cycle the selected sector's priority: Critical, Low, Normal"));
+	Row(TEXT("G"), TEXT("Deny right-of-way to rivals in the selected sector"));
+	Row(TEXT("B"), TEXT("Buy 10 bandwidth at a peered Exchange"));
+	Sect(TEXT("Build (then click one of your hexes)"));
+	Row(TEXT("1  2  3"), TEXT("Edge Node, Core Node, Hyperscale"));
+	Row(TEXT("4  5  6"), TEXT("Substation, Repeater, Peering Rack"));
+	Row(TEXT("7  8  9  0"), TEXT("Security Outpost, Surveillance Array, Lab, Honeypot"));
+	Row(TEXT("L"), TEXT("Lay fiber: click the start, then the destination"));
+	Sect(TEXT("Operations (then click the target hex)"));
+	Row(TEXT("C  I  H  P"), TEXT("Scan, Intrusion, Harden, Purge"));
+	Row(TEXT("K  J  R  D  N"), TEXT("Siphon, Jam, Root, DDoS, Swarm Daemon"));
+	Sect(TEXT("Windows"));
+	Row(TEXT("T  M  V"), TEXT("Research, Doctrine, Board Room"));
+	Row(TEXT("F1  F2  F3"), TEXT("How to Play, Guide, Controls"));
+	Sect(TEXT("Victory verbs (Board Room)"));
+	Row(TEXT("F5 .. F12"), TEXT("Tender Offer, Buy shares, Poison pill, Train Seed, Launch, Blackout, Charter motion, Kill switch"));
+	return Panel(B, 12.f);
 }
 
 TSharedRef<SWidget> SGLHud::HelpPanel()

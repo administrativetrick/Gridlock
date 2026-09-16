@@ -50,7 +50,8 @@ private:
 	TSharedRef<SWidget> Head(const FString& S);
 	TSharedRef<SWidget> Txt(TAttribute<FText> T, const FSlateFontInfo& F, TAttribute<FSlateColor> C, bool Wrap = false);
 	TSharedRef<SWidget> Txt(const FString& S, const FSlateFontInfo& F, const FLinearColor& C, bool Wrap = false);
-	TSharedRef<SWidget> Btn(const FString& Label, TFunction<void()> Fn, const FSlateFontInfo* Font = nullptr, TAttribute<FSlateColor> Fg = TAttribute<FSlateColor>());
+	TSharedRef<SWidget> Btn(const FString& Label, TFunction<void()> Fn, const FSlateFontInfo* Font = nullptr, TAttribute<FSlateColor> Fg = TAttribute<FSlateColor>(), const FString& Tip = FString());
+	TSharedRef<SWidget> ControlsPanel();
 	TSharedRef<SWidget> Gauge(TAttribute<TOptional<float>> Pct, TAttribute<FSlateColor> Fill, float Height = 7.f);
 	TSharedRef<SWidget> LabelledGauge(const FString& Label, TAttribute<TOptional<float>> Pct, TAttribute<FSlateColor> Fill, TAttribute<FText> Value);
 
