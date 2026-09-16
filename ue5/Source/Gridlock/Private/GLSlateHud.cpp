@@ -29,6 +29,7 @@ void SGLHud::Construct(const FArguments& InArgs)
 	F12 = FCoreStyle::GetDefaultFontStyle("Bold", 12); F13 = FCoreStyle::GetDefaultFontStyle("Bold", 13); F18 = FCoreStyle::GetDefaultFontStyle("Bold", 20);
 	BtnStyle.SetNormal(BtnN).SetHovered(BtnH).SetPressed(BtnP).SetNormalPadding(FMargin(8, 3)).SetPressedPadding(FMargin(8, 4, 8, 2));
 	BarStyle.SetBackgroundImage(BarBg).SetFillImage(BarFill).SetEnableFillAnimation(false);
+	EndStyle.SetNormal(EndN).SetHovered(EndH).SetPressed(EndP).SetNormalPadding(FMargin(0)).SetPressedPadding(FMargin(0));
 
 	const TAttribute<EVisibility> VisBoard = Attr<EVisibility>([this]() { return (PC && PC->bBoard) ? EVisibility::Visible : EVisibility::Collapsed; });
 	const TAttribute<EVisibility> VisResearch = Attr<EVisibility>([this]() { return (PC && PC->bResearch) ? EVisibility::Visible : EVisibility::Collapsed; });
@@ -47,6 +48,17 @@ void SGLHud::Construct(const FArguments& InArgs)
 		+ SConstraintCanvas::Slot().Anchors(FAnchors(0, 1)).Offset(FMargin(8, -8, 640, 190)).Alignment(FVector2D(0, 1))
 		[
 			Panel(SNew(SScrollBox) + SScrollBox::Slot() [ SAssignNew(LogBox, SVerticalBox) ], 8.f)
+		]
+		+ SConstraintCanvas::Slot().Anchors(FAnchors(1, 1)).Offset(FMargin(-28, -28, 112, 112)).Alignment(FVector2D(1, 1))
+		[
+			SNew(SButton).ButtonStyle(&EndStyle).IsFocusable(false).ContentPadding(FMargin(0)).HAlign(HAlign_Center).VAlign(VAlign_Center)
+			.OnClicked_Lambda([this]() { if (PC) PC->OnEndCycle(); return FReply::Handled(); })
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center) [ Txt(TEXT("END"), F13, kCyan) ]
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center) [ Txt(TEXT("CYCLE"), F13, kCyan) ]
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 4, 0, 0) [ Txt(Attr<FText>([this]() { AGLGameMode* G = GM(); return G ? Tf(TEXT("%d"), G->Sim().S().cycle) : FText::GetEmpty(); }), F10, FSlateColor(kDim)) ]
+			]
 		]
 		+ SConstraintCanvas::Slot().Anchors(FAnchors(0.5f, 0.5f)).Alignment(FVector2D(0.5f, 0.5f)).AutoSize(true)
 		[
@@ -153,7 +165,6 @@ TSharedRef<SWidget> SGLHud::Toolbar()
 {
 	TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
 	auto Add = [&](TSharedRef<SWidget> W) { Box->AddSlot().AutoHeight().Padding(0, 2) [ W ]; };
-	Add(Btn(TEXT("END CYCLE  [Space]"), [this]() { PC->OnEndCycle(); }, &F12, FSlateColor(kCyan)));
 	Add(Btn(TEXT("Lay fiber  [L]"), [this]() { PC->SetLay(); }));
 	Add(Btn(TEXT("Build  >"), [this]() { bBuildMenu = !bBuildMenu; bOpsMenu = false; }));
 	TSharedRef<SVerticalBox> BuildMenu = SNew(SVerticalBox);
