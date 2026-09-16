@@ -112,6 +112,16 @@ void AGLGameMode::SetupDevFlags()
 			}
 		}), 4.f, false);
 	}
+	float Zoom = 0.f;
+	if (FParse::Value(FCommandLine::Get(), TEXT("autozoom="), Zoom) && Zoom > 0.f)
+	{
+		FTimerHandle H6; TWeakObjectPtr<AGLGameMode> Self(this);
+		GetWorldTimerManager().SetTimer(H6, FTimerDelegate::CreateLambda([Self, Zoom]()
+		{
+			if (!Self.IsValid()) return;
+			if (APlayerController* PC = Self->GetWorld()->GetFirstPlayerController()) if (AGLCameraPawn* P = Cast<AGLCameraPawn>(PC->GetPawn())) P->SetZoom(Zoom);
+		}), 3.f, false);
+	}
 	float Quit = 0.f;
 	if (FParse::Value(FCommandLine::Get(), TEXT("autoquit="), Quit) && Quit > 0.f)
 	{

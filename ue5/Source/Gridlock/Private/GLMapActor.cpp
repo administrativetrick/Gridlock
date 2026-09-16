@@ -76,8 +76,10 @@ void AGLMapActor::Init(AGLGameMode* InGM)
 		GMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.12f, 0.14f, 0.2f));
 		GMat->SetVectorParameterValue(TEXT("Emissive"), FLinearColor::Black);
 		GMat->SetScalarParameterValue(TEXT("EmissiveStrength"), 0.f);
-		GMat->SetScalarParameterValue(TEXT("Metallic"), 0.85f);
-		GMat->SetScalarParameterValue(TEXT("Roughness"), 0.3f);
+		GMat->SetScalarParameterValue(TEXT("Metallic"), 0.2f);
+		GMat->SetScalarParameterValue(TEXT("Roughness"), 0.6f);
+		GMat->SetScalarParameterValue(TEXT("MetalMix"), 0.25f);
+		GMat->SetScalarParameterValue(TEXT("Wet"), 1.f);
 		Ground->SetMaterial(0, GMat);
 	}
 	UStaticMesh* Tile = Mesh(TEXT("SM_Tile"));
@@ -97,6 +99,8 @@ void AGLMapActor::Init(AGLGameMode* InGM)
 		MID->SetScalarParameterValue(TEXT("Metallic"), 0.3f);
 		MID->SetScalarParameterValue(TEXT("Roughness"), 0.8f);
 		MID->SetScalarParameterValue(TEXT("TraceStrength"), H.type == gl::Sector::Barrier ? 0.f : 0.55f);
+		MID->SetScalarParameterValue(TEXT("MetalMix"), H.type == gl::Sector::Barrier ? 0.6f : 0.12f);
+		MID->SetScalarParameterValue(TEXT("Wet"), H.type == gl::Sector::Barrier ? 1.f : 0.45f);
 		M->SetMaterial(0, MID);
 		HexTiles[H.id] = M; HexMats[H.id] = MID; CompToHex.Add(M, H.id);
 	}
@@ -216,6 +220,8 @@ void AGLMapActor::RefreshStructures()
 			UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(MatNeon, this);
 			MID->SetScalarParameterValue(TEXT("RimWidth"), 0.09f);
 			MID->SetScalarParameterValue(TEXT("Fill"), 0.12f);
+			MID->SetScalarParameterValue(TEXT("MetalMix"), 1.f);
+			MID->SetScalarParameterValue(TEXT("Metallic"), 0.f);
 			C->SetMaterial(0, MID);
 			StructComps.Add(St.id, C); StructMats.Add(St.id, MID);
 		}

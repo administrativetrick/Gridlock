@@ -36,12 +36,15 @@ Compiles the UE5 game module against the freshly built `build\gridlock_sim.lib`.
 "D:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%CD%\ue5\Gridlock.uproject" -run=GLAssets
 ```
 
-Regenerates every asset from code: the tileable textures (`ue5/Content/Textures/T_*`: concrete
-albedo / occlusion / roughness with panel seams, its normal map, grime and streaks, a window-cell
-atlas with per-cell lighting and hue, and the circuit-trace pattern for tile tops, all synthesised by
-`GLTextureKit`), the materials (`ue5/Content/Materials/M_Neon`, `M_NeonInst`, `M_GlowInst`, `M_Holo`,
-whose surface is a custom HLSL node sampling the textures tri-planar in world space with lit windows
-on walls) and the procedural kitbash library (`ue5/Content/Meshes/SM_*`: towers, slabs, arcologies,
+Regenerates every asset from code: the tileable PBR textures (`ue5/Content/Textures/T_*`,
+synthesised by `GLTextureKit` from gradient noise with domain warping and cellular noise: 1024²
+concrete colour / masks / normal with two-level panels, bolt dents, chipped seams, cracks and rust
+streaks; a riveted, scratched metal set with hazard stripes; grime with puddle masks; a window-cell
+atlas with frames, spandrels, blinds, curtains and three hue families; neon signage glyph bars; and
+routed circuit traces for tile tops), the materials (`ue5/Content/Materials/M_Neon`, `M_NeonInst`,
+`M_GlowInst`, `M_Holo`, whose surface is a custom HLSL node blending concrete and metal tri-planar in
+world space with a world-space normal, puddle wetness, flickering lit windows, animated signage bands
+and owner-coloured traces) and the procedural kitbash library (`ue5/Content/Meshes/SM_*`: towers, slabs, arcologies,
 factories, docks, sprawl, undercity, the Exchange spire, every infrastructure prop, the fiber cable
 and the bevelled hex tile, all built by `GLMeshKit`). The assets are committed, so this is only
 needed after editing `GLTextureKit.cpp`, `GLMeshKit.cpp` or `GLMaterialCommandlet.cpp`.
