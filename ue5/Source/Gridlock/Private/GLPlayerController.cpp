@@ -36,6 +36,7 @@ void AGLPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &AGLPlayerController::OnEndCycle);
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AGLPlayerController::OnCancel);
 	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &AGLPlayerController::ToggleHelp);
+	InputComponent->BindKey(EKeys::F2, IE_Pressed, this, &AGLPlayerController::ToggleGuide);
 	InputComponent->BindKey(EKeys::V, IE_Pressed, this, &AGLPlayerController::ToggleBoard);
 	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &AGLPlayerController::ToggleResearch);
 	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AGLPlayerController::ToggleDoctrine);
@@ -92,6 +93,13 @@ void AGLPlayerController::PlayerTick(float DeltaTime)
 		FVector D(0);
 		if (PanState[0]) D.Y += 1; if (PanState[1]) D.Y -= 1; if (PanState[2]) D.X -= 1; if (PanState[3]) D.X += 1;
 		if (!D.IsNearlyZero()) P->AddActorWorldOffset(D.GetSafeNormal() * Speed * DeltaTime);
+	}
+	// hover highlight
+	if (AGLGameMode* G = GM()) if (G->Map)
+	{
+		FHitResult Hit; int32 Hov = -1;
+		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit)) Hov = G->Map->HexFromComponent(Hit.GetComponent());
+		G->Map->Hovered = Hov;
 	}
 }
 

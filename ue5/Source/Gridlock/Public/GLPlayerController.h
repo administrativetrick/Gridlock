@@ -24,7 +24,8 @@ public:
 	EGLMode Mode = EGLMode::Select;
 	int32 BuildKind = -1; int32 BuildTier = 1; int32 OpKind = -1;
 	int32 Sel = -1; int32 FromHex = -1;
-	bool bHelp = false; bool bBoard = false; bool bResearch = false; bool bDoctrine = false;
+	bool bHelp = false; bool bBoard = false; bool bResearch = false; bool bDoctrine = false; bool bGuide = true;
+	void ToggleGuide() { bGuide = !bGuide; }
 	FString LastMsg;
 	FString ModeText() const;
 

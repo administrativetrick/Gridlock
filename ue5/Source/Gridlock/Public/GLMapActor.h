@@ -33,6 +33,8 @@ public:
 
 	int32 Selected = -1;
 	int32 FromHex = -1;
+	int32 Hovered = -1;
+	void DrawHexOutline(int32 Hex, const FColor& Color, float Thickness, float Radius, float ZOffset) const;
 
 private:
 	struct FBuilding { FName Mesh; int32 Index; int32 Hex; };

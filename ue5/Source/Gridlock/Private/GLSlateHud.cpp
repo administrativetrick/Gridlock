@@ -49,6 +49,11 @@ void SGLHud::Construct(const FArguments& InArgs)
 		[
 			Panel(SNew(SScrollBox) + SScrollBox::Slot() [ SAssignNew(LogBox, SVerticalBox) ], 8.f)
 		]
+		+ SConstraintCanvas::Slot().Anchors(FAnchors(0, 0)).Offset(FMargin(268, 82, 540, 0)).Alignment(FVector2D(0, 0)).AutoSize(true)
+		[
+			SNew(SBox).WidthOverride(540).Visibility_Lambda([this]() { return (PC && PC->bGuide) ? EVisibility::Visible : EVisibility::Collapsed; })
+			[ Panel(SAssignNew(GuideBox, SVerticalBox), 10.f) ]
+		]
 		+ SConstraintCanvas::Slot().Anchors(FAnchors(1, 1)).Offset(FMargin(-28, -28, 112, 112)).Alignment(FVector2D(1, 1))
 		[
 			SNew(SButton).ButtonStyle(&EndStyle).IsFocusable(false).ContentPadding(FMargin(0)).HAlign(HAlign_Center).VAlign(VAlign_Center)
@@ -76,10 +81,10 @@ void SGLHud::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime,
 {
 	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
 	AGLGameMode* G = GM(); if (!G || !PC) return;
-	if (G->Version != SeenVersion || PC->Sel != SeenSel)
+	if (G->Version != SeenVersion || PC->Sel != SeenSel || PC->Mode != SeenMode || PC->FromHex != SeenFrom)
 	{
-		SeenVersion = G->Version; SeenSel = PC->Sel;
-		RebuildInspector(); RebuildLog(); RebuildBoard(); RebuildResearch(); RebuildDoctrine();
+		SeenVersion = G->Version; SeenSel = PC->Sel; SeenMode = PC->Mode; SeenFrom = PC->FromHex;
+		RebuildInspector(); RebuildLog(); RebuildBoard(); RebuildResearch(); RebuildDoctrine(); RebuildGuide();
 	}
 }
 
@@ -192,6 +197,7 @@ TSharedRef<SWidget> SGLHud::Toolbar()
 	Add(Btn(TEXT("Board Room  [V]"), [this]() { PC->ToggleBoard(); }));
 	Add(Btn(TEXT("Buy 10 BW  [B]"), [this]() { PC->BuyBW(); }));
 	Add(Btn(TEXT("Recentre  [Home]"), [this]() { PC->Recenter(); }));
+	Add(Btn(TEXT("Guide  [F2]"), [this]() { PC->ToggleGuide(); }));
 	Add(Btn(TEXT("Help  [F1]"), [this]() { PC->ToggleHelp(); }));
 	Add(Btn(TEXT("Cancel  [Esc]"), [this]() { PC->OnCancel(); }, nullptr, FSlateColor(kDim)));
 	return Panel(Box, 6.f);
@@ -383,4 +389,53 @@ void SGLHud::RebuildDoctrine()
 			+ SHorizontalBox::Slot().FillWidth(0.52f).VAlign(VAlign_Center).Padding(8, 0) [ Txt(UTF8_TO_TCHAR(D.desc), F9, kDim, true) ]
 			+ SHorizontalBox::Slot().FillWidth(0.14f).HAlign(HAlign_Right) [ Has ? Txt(TEXT("adopted"), F9, kGood) : Can ? Btn(TEXT("Adopt"), [this, i]() { PC->TakeDoctrineAt(i); }, &F9) : Txt(TEXT("locked"), F9, kDim) ]);
 	}
+}
+
+// ---------------------------------------------------------------- guide: tracks the opening and tells the player exactly what to click next
+void SGLHud::RebuildGuide()
+{
+	if (!PC->bGuide || !GuideBox.IsValid()) return;
+	GuideBox->ClearChildren();
+	AGLGameMode* G = GM(); const gl::Game& Gm = G->Sim(); const gl::GameState& S = Gm.S(); const int32 Me = G->Me(); const gl::Syndicate& Y = S.synds[Me];
+	auto Row = [&](TSharedRef<SWidget> W, float Top = 3.f) { GuideBox->AddSlot().AutoHeight().Padding(0, Top, 0, 0) [ W ]; };
+
+	// what the game is waiting for right now takes priority over the tutorial step
+	if (PC->Mode != EGLMode::Select)
+	{
+		Row(SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center) [ Txt(PC->ModeText(), F13, kWarn, true) ]
+			+ SHorizontalBox::Slot().AutoWidth() [ Btn(TEXT("Cancel  [Esc]"), [this]() { PC->OnCancel(); }, &F9) ]);
+		if (PC->Mode == EGLMode::Lay) Row(Txt(PC->FromHex < 0 ? TEXT("Your network is the cyan hexes: any sector you hold, or any hex your fiber already passes through.") : TEXT("Pick a neighbouring dark hex. Rights along the route are bought for you; the message will show the cost and the projected bandwidth survival."), F10, kDim, true));
+		if (PC->Mode == EGLMode::Build) Row(Txt(TEXT("Structures go in sectors you control. Nodes make bandwidth and need a Substation within 2 hexes; Repeaters reset hop loss; Racks belong in an Exchange."), F10, kDim, true));
+		if (PC->Mode == EGLMode::Op) Row(Txt(TEXT("Attack ops need reach: a target adjacent to your sectors, one you already have presence in, or within 4 hexes of an Exchange you peer at."), F10, kDim, true));
+		return;
+	}
+
+	// progress checks
+	int32 Owned = 0, Nodes = 0, Links = 0; bool Peered = false, Presence = false, Brownout = false;
+	for (auto& H : S.hexes) { if (H.owner == Me) { ++Owned; if (H.brownout) Brownout = true; } else if (H.owner >= 0 && H.P.count(Me) && H.P.at(Me) > 0) Presence = true; }
+	for (auto& St : S.structs) if (St.alive && St.sid == Me && St.kind == gl::StructKind::Node) ++Nodes;
+	for (auto& L : S.links) if (L.alive && L.sid == Me) ++Links;
+	for (auto& KV : Y.peeredLast) if (KV.second >= S.cycle - 1) Peered = true;
+	bool Researching = !Y.researchQueue.empty();
+
+	struct FStep { const TCHAR* Title; const TCHAR* Body; bool Done; };
+	const FStep Steps[] = {
+		{ TEXT("Claim your first sector"), TEXT("Territory is what your network can feed. Press L (or Build menu > Lay fiber), click one of your cyan hexes, then click a dark neighbour. Fiber is laid and conduit rights are bought for you."), Links > 3 || Owned > 4 },
+		{ TEXT("End the cycle"), TEXT("Press the round END CYCLE button (or Space). Bandwidth flows down your fiber; a sector whose demand is met turns your colour and starts paying Capital."), S.cycle >= 1 && (Owned > 4 || Links > 3) },
+		{ TEXT("Queue research"), TEXT("Press T. Research is paid with compute from your nodes. Queue Grid Contracts or Trenching to start; the Auto-queue button picks a sensible order."), Researching || Y.techs[(int)gl::Tech::GridContracts] || Y.techs[(int)gl::Tech::Trenching] },
+		{ TEXT("Build a second node"), TEXT("Each hop of fiber loses bandwidth (2% + 1% per hop). When a far sector browns out (red flash), select it and press 1 for an Edge Node, then 4 for a Substation next to it."), Nodes >= 2 },
+		{ TEXT("Peer at an Exchange"), TEXT("The white spires are Exchanges. Lay fiber into one, then select it and press 6 for a Peering Rack. You sell surplus bandwidth there and gain long reach for ops."), Peered },
+		{ TEXT("Go cyber"), TEXT("Press C and click a rival sector to Scan it, then I to run an Intrusion. Presence rises each cycle; at 40 you can Siphon (K) their yield, at 70 Root (R) the subnet. Watch your Exposure gauge."), Presence },
+		{ TEXT("Choose an ending"), TEXT("Press V for the Board Room: Hostile Takeover, Singularity, Blackout or The Charter, each with its requirements listed. Doctrine (M) needs Mandate from the Board every 12 cycles."), false },
+	};
+	int32 Cur = 0; for (; Cur < 7; ++Cur) if (!Steps[Cur].Done) break;
+	if (Cur >= 7) Cur = 6;
+	Row(SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center) [ Head(FString::Printf(TEXT("HOW TO PLAY   -   step %d of 7:  %s"), Cur + 1, Steps[Cur].Title)) ]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(6, 0, 0, 0) [ Btn(TEXT("Hide  [F2]"), [this]() { PC->ToggleGuide(); }, &F9, FSlateColor(kDim)) ]);
+	Row(Txt(Steps[Cur].Body, F11, kInk, true), 6.f);
+	if (Brownout) Row(Txt(TEXT("A sector of yours is in BROWNOUT (flashing red): it receives under 60% of its demand and will go neutral in a few cycles. Add capacity or a node on that branch."), F10, kBad, true), 6.f);
+	FString Done; for (int32 i = 0; i < 7; ++i) Done += Steps[i].Done ? TEXT(" [x]") : (i == Cur ? TEXT(" [>]") : TEXT(" [ ]"));
+	Row(Txt(Done, F9, kDim), 4.f);
 }

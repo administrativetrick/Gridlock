@@ -367,15 +367,26 @@ void AGLMapActor::TickPackets()
 	PacketMeshes->BatchUpdateInstancesTransforms(0, Tfs, true, true, true);
 }
 
+// Hexagon outline matching the tile mesh: pointy-top, corners at 30 + 60k degrees.
+void AGLMapActor::DrawHexOutline(int32 Hex, const FColor& Color, float Thickness, float Radius, float ZOffset) const
+{
+	const FVector C = HexWorld(Hex) + FVector(0, 0, kPuck + ZOffset);
+	for (int32 i = 0; i < 6; ++i)
+	{
+		const float A0 = FMath::DegreesToRadians(30.f + 60.f * i), A1 = FMath::DegreesToRadians(30.f + 60.f * (i + 1));
+		DrawDebugLine(GetWorld(), C + FVector(Radius * FMath::Cos(A0), Radius * FMath::Sin(A0), 0), C + FVector(Radius * FMath::Cos(A1), Radius * FMath::Sin(A1), 0), Color, false, -1.f, 0, Thickness);
+	}
+}
+
 void AGLMapActor::DrawOverlays()
 {
-	const gl::GameState& S = GM->Sim().S(); const int32 Me = GM->Me(); UWorld* W = GetWorld();
-	const FVector Y(1, 0, 0), Z(0, 1, 0);
+	const gl::GameState& S = GM->Sim().S(); const int32 Me = GM->Me();
 	for (const gl::Hex& H : S.hexes)
 		if (H.owner == Me && !H.dual.count(Me) && H.id != S.synds[Me].crown && H.delivered.count(Me))
-			DrawDebugCircle(W, HexWorld(H.id) + FVector(0, 0, kPuck + 2.f), 90.f, 6, FColor(120, 120, 150), false, -1.f, 0, 0.8f, Y, Z, false);
-	if (Selected >= 0) DrawDebugCircle(W, HexWorld(Selected) + FVector(0, 0, kPuck + 3.f), 98.f, 6, FColor::White, false, -1.f, 0, 2.5f, Y, Z, false);
-	if (FromHex >= 0) DrawDebugCircle(W, HexWorld(FromHex) + FVector(0, 0, kPuck + 3.f), 98.f, 6, FColor::Yellow, false, -1.f, 0, 2.5f, Y, Z, false);
+			DrawHexOutline(H.id, FColor(110, 110, 140), 0.8f, 84.f, 2.f);
+	if (Hovered >= 0 && Hovered != Selected) DrawHexOutline(Hovered, FColor(120, 230, 255, 200), 1.8f, 94.f, 2.5f);
+	if (Selected >= 0) { DrawHexOutline(Selected, FColor::White, 3.5f, 94.f, 3.f); DrawHexOutline(Selected, FColor(0, 230, 255), 1.5f, 99.f, 3.f); }
+	if (FromHex >= 0) DrawHexOutline(FromHex, FColor::Yellow, 3.5f, 94.f, 3.5f);
 }
 
 void AGLMapActor::Tick(float DeltaSeconds)

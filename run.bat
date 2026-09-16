@@ -12,4 +12,4 @@ if not exist "%~dp0ue5\Binaries\Win64\UnrealEditor-Gridlock.dll" (
   echo   "D:\Program Files\Epic Games\UE_5.8\Engine\Build\BatchFiles\Build.bat" GridlockEditor Win64 Development -Project="%~dp0ue5\Gridlock.uproject"
   exit /b 1
 )
-start "" %UE% "%~dp0ue5\Gridlock.uproject" -game -windowed -resx=1600 -resy=900 -arch=%ARCH% -seed=%SEED% %3 %4 %5
+start "" %UE% "%~dp0ue5\Gridlock.uproject" -game -windowed -resx=1600 -resy=900 -ForceRes -arch=%ARCH% -seed=%SEED% %3 %4 %5

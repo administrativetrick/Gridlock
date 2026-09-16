@@ -3,8 +3,8 @@
 #include "Widgets/SCompoundWidget.h"
 #include "Styling/SlateTypes.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
+#include "GLPlayerController.h"
 
-class AGLPlayerController;
 class AGLGameMode;
 class SVerticalBox;
 
@@ -41,7 +41,9 @@ private:
 	FProgressBarStyle BarStyle;
 	FSlateFontInfo F9, F10, F11, F12, F13, F18;
 
-	TSharedPtr<SVerticalBox> InspectorBox, LogBox, BoardBox, ResearchBox, DoctrineBox;
+	TSharedPtr<SVerticalBox> InspectorBox, LogBox, BoardBox, ResearchBox, DoctrineBox, GuideBox;
+	void RebuildGuide();
+	EGLMode SeenMode = EGLMode::Select; int32 SeenFrom = -2;
 
 	AGLGameMode* GM() const;
 	TSharedRef<SWidget> Panel(TSharedRef<SWidget> Content, float Pad = 10.f);
