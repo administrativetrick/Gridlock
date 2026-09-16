@@ -108,6 +108,14 @@ void AGLMapActor::Init(AGLGameMode* InGM)
 	PacketMeshes = MakeISM(this, RootComponent, TEXT("Packets"), Sphere, MatGlow, 4, false);
 	Discs = MakeISM(this, RootComponent, TEXT("Discs"), Cylinder, MatHolo, 4, false);
 	Discs->SetTranslucentSortPriority(1);
+	// beacon pillars mark the Exchanges from anywhere on the map (always visible, fog or not)
+	Beacons = MakeISM(this, RootComponent, TEXT("Beacons"), Cylinder, MatGlow, 4, false);
+	for (int32 Ex : S.exchanges)
+	{
+		const int32 I = Beacons->AddInstance(FTransform(FRotator::ZeroRotator, HexWorld(Ex) + FVector(0, 0, kPuck + 260.f + 450.f), FVector(0.14f, 0.14f, 9.f)), true);
+		Beacons->SetCustomDataValue(I, 0, 0.85f, false); Beacons->SetCustomDataValue(I, 1, 0.95f, false); Beacons->SetCustomDataValue(I, 2, 1.f, false); Beacons->SetCustomDataValue(I, 3, 2.2f, false);
+	}
+	Beacons->MarkRenderStateDirty();
 	BuildCity();
 	Refresh();
 }

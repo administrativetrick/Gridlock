@@ -196,6 +196,7 @@ TSharedRef<SWidget> SGLHud::Toolbar()
 	Add(Btn(TEXT("Doctrine  [M]"), [this]() { PC->ToggleDoctrine(); }));
 	Add(Btn(TEXT("Board Room  [V]"), [this]() { PC->ToggleBoard(); }));
 	Add(Btn(TEXT("Buy 10 BW  [B]"), [this]() { PC->BuyBW(); }));
+	Add(Btn(TEXT("Find Exchange  [F]"), [this]() { PC->FocusExchange(); }));
 	Add(Btn(TEXT("Recentre  [Home]"), [this]() { PC->Recenter(); }));
 	Add(Btn(TEXT("Guide  [F2]"), [this]() { PC->ToggleGuide(); }));
 	Add(Btn(TEXT("Help  [F1]"), [this]() { PC->ToggleHelp(); }));
@@ -425,7 +426,7 @@ void SGLHud::RebuildGuide()
 		{ TEXT("End the cycle"), TEXT("Press the round END CYCLE button (or Space). Bandwidth flows down your fiber; a sector whose demand is met turns your colour and starts paying Capital."), S.cycle >= 1 && (Owned > 4 || Links > 3) },
 		{ TEXT("Queue research"), TEXT("Press T. Research is paid with compute from your nodes. Queue Grid Contracts or Trenching to start; the Auto-queue button picks a sensible order."), Researching || Y.techs[(int)gl::Tech::GridContracts] || Y.techs[(int)gl::Tech::Trenching] },
 		{ TEXT("Build a second node"), TEXT("Each hop of fiber loses bandwidth (2% + 1% per hop). When a far sector browns out (red flash), select it and press 1 for an Edge Node, then 4 for a Substation next to it."), Nodes >= 2 },
-		{ TEXT("Peer at an Exchange"), TEXT("The white spires are Exchanges. Lay fiber into one, then select it and press 6 for a Peering Rack. You sell surplus bandwidth there and gain long reach for ops."), Peered },
+		{ TEXT("Peer at an Exchange"), TEXT("Exchanges are the three neutral hexes under the tall white beacon pillars, always at least five hexes from any start. Press F (Find Exchange) to fly to the nearest one. Lay fiber into it, then select it and press 6 for a Peering Rack: you sell surplus bandwidth there and gain long reach for ops."), Peered },
 		{ TEXT("Go cyber"), TEXT("Press C and click a rival sector to Scan it, then I to run an Intrusion. Presence rises each cycle; at 40 you can Siphon (K) their yield, at 70 Root (R) the subnet. Watch your Exposure gauge."), Presence },
 		{ TEXT("Choose an ending"), TEXT("Press V for the Board Room: Hostile Takeover, Singularity, Blackout or The Charter, each with its requirements listed. Doctrine (M) needs Mandate from the Board every 12 cycles."), false },
 	};

@@ -45,6 +45,7 @@ void AGLPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::B, IE_Pressed, this, &AGLPlayerController::BuyBW);
 	InputComponent->BindKey(EKeys::G, IE_Pressed, this, &AGLPlayerController::ToggleDeny);
 	InputComponent->BindKey(EKeys::Home, IE_Pressed, this, &AGLPlayerController::Recenter);
+	InputComponent->BindKey(EKeys::F, IE_Pressed, this, &AGLPlayerController::FocusExchange);
 	InputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &AGLPlayerController::ZoomIn);
 	InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AGLPlayerController::ZoomOut);
 	InputComponent->BindKey(EKeys::One, IE_Pressed, this, &AGLPlayerController::BuildKey<(int32)gl::StructKind::Node, 1>);
@@ -209,6 +210,19 @@ void AGLPlayerController::Recenter()
 	AGLGameMode* G = GM(); if (!G || !G->Map) return;
 	if (APawn* P = GetPawn()) { const gl::GameState& S = G->Sim().S(); P->SetActorLocation(G->Map->HexWorld(S.synds[G->Me()].crown)); }
 }
+void AGLPlayerController::FocusExchange()
+{
+	AGLGameMode* G = GM(); if (!G || !G->Map) return;
+	const gl::GameState& S = G->Sim().S(); const int32 Crown = S.synds[G->Me()].crown;
+	int32 Best = -1, BestD = 1 << 30;
+	for (int32 Ex : S.exchanges) { const int32 D = S.grid.dist(Crown, Ex); if (D < BestD) { BestD = D; Best = Ex; } }
+	if (Best < 0) { LastMsg = TEXT("This city has no Exchange."); Sync(); return; }
+	if (APawn* P = GetPawn()) P->SetActorLocation(G->Map->HexWorld(Best));
+	Sel = Best;
+	LastMsg = FString::Printf(TEXT("Exchange #%d, %d hexes from your Crown Node. Lay fiber into it, then build a Peering Rack (6) on it."), Best, BestD);
+	Sync();
+}
+
 void AGLPlayerController::ZoomIn() { if (AGLCameraPawn* P = Cast<AGLCameraPawn>(GetPawn())) P->SetZoom(P->GetZoom() * 0.85f); }
 void AGLPlayerController::ZoomOut() { if (AGLCameraPawn* P = Cast<AGLCameraPawn>(GetPawn())) P->SetZoom(P->GetZoom() / 0.85f); }
 

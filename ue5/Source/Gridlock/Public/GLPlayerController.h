@@ -48,6 +48,7 @@ public:
 	void BuyBW();
 	void ToggleDeny();
 	void Recenter();
+	void FocusExchange();          // fly the camera to the Exchange nearest your Crown Node
 	void Verb(int32 Which);
 	void ZoomIn(); void ZoomOut();
 	void Report(const gl::Result& R);

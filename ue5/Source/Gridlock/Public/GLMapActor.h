@@ -48,6 +48,7 @@ private:
 	UPROPERTY() TObjectPtr<UInstancedStaticMeshComponent> LinkMeshes = nullptr;
 	UPROPERTY() TObjectPtr<UInstancedStaticMeshComponent> PacketMeshes = nullptr;
 	UPROPERTY() TObjectPtr<UInstancedStaticMeshComponent> Discs = nullptr;
+	UPROPERTY() TObjectPtr<UInstancedStaticMeshComponent> Beacons = nullptr;
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> Ground = nullptr;
 	UPROPERTY() TMap<int32, TObjectPtr<UStaticMeshComponent>> StructComps;
 	UPROPERTY() TMap<int32, TObjectPtr<UMaterialInstanceDynamic>> StructMats;
